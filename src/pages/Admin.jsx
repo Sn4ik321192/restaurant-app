@@ -1,12 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { LogOut, Plus, Save, ShieldAlert, Trash2 } from 'lucide-react';
+import { Database, LogOut, Plus, RefreshCw, Save, ShieldAlert, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AuthRequired from '../components/AuthRequired.jsx';
 import FormField, { inputClass } from '../components/FormField.jsx';
 import { ORDER_STATUSES, useRestaurant } from '../context/RestaurantContext.jsx';
 
 export default function Admin() {
-  const { data, orders, isAuthenticated, isAdmin, user, logout, updateRestaurant, addDish, deleteDish, updateDishPrice, updateOrderStatus } = useRestaurant();
+  const {
+    data,
+    orders,
+    bookings,
+    databaseStatus,
+    isAuthenticated,
+    isAdmin,
+    user,
+    logout,
+    updateRestaurant,
+    addDish,
+    deleteDish,
+    updateDishPrice,
+    updateOrderStatus,
+    reloadDatabase,
+  } = useRestaurant();
   const [restaurant, setRestaurant] = useState({
     name: data.restaurant.name,
     phone: data.restaurant.phone,
@@ -26,10 +41,18 @@ export default function Admin() {
 
   useEffect(() => {
     setPriceDrafts((current) => ({
-      ...Object.fromEntries(data.menuItems.map((item) => [item.id, String(item.price)])),
       ...current,
+      ...Object.fromEntries(data.menuItems.map((item) => [item.id, String(item.price)])),
     }));
   }, [data.menuItems]);
+
+  useEffect(() => {
+    setRestaurant({
+      name: data.restaurant.name,
+      phone: data.restaurant.phone,
+      address: data.restaurant.address,
+    });
+  }, [data.restaurant.name, data.restaurant.phone, data.restaurant.address]);
 
   const showNotice = (message) => {
     setNotice(message);
@@ -119,6 +142,36 @@ export default function Admin() {
       </div>
       {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
 
+      <div className="mt-8 flex flex-col gap-4 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:flex-row md:items-center md:justify-between md:p-5">
+        <div className="flex items-start gap-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gold/12 text-gold">
+            <Database size={22} />
+          </div>
+          <div>
+            <p className="font-extrabold">Демо-база данных</p>
+            <p className="mt-1 text-sm text-cream/58">
+              {databaseStatus.enabled
+                ? databaseStatus.connected
+                  ? 'Supabase подключен. Данные синхронизируются между клиентами и админкой.'
+                  : databaseStatus.loading
+                    ? 'Подключаемся к Supabase...'
+                    : 'Supabase включен, но сейчас есть ошибка подключения.'
+                : 'Сейчас работает демо-режим localStorage. После настройки .env данные будут уходить в Supabase.'}
+            </p>
+            {databaseStatus.error && <p className="mt-2 text-sm font-bold text-red-200">{databaseStatus.error}</p>}
+          </div>
+        </div>
+        {databaseStatus.enabled && (
+          <button
+            type="button"
+            onClick={reloadDatabase}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-gold/25 px-5 py-3 font-bold text-gold transition hover:bg-gold hover:text-ink"
+          >
+            <RefreshCw size={17} /> Обновить из БД
+          </button>
+        )}
+      </div>
+
       <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">
         <h2 className="mb-2 text-2xl font-bold">Заказы и статусы</h2>
         <p className="mb-5 text-sm text-cream/58">Админ или курьер меняет статус, а клиент видит уведомление в профиле.</p>
@@ -148,6 +201,25 @@ export default function Admin() {
           </div>
         ) : (
           <div className="rounded-2xl border border-gold/14 bg-ink/60 p-6 text-center text-cream/58">Заказов пока нет.</div>
+        )}
+      </div>
+
+      <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">
+        <h2 className="mb-2 text-2xl font-bold">Брони столиков</h2>
+        <p className="mb-5 text-sm text-cream/58">Заявки клиентов на дату, время и количество гостей.</p>
+        {bookings.length ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {bookings.map((booking) => (
+              <div key={booking.id} className="rounded-2xl border border-cream/8 bg-ink/60 p-4">
+                <p className="font-bold">{booking.name || 'Гость'} · {booking.guests} гостей</p>
+                <p className="mt-1 text-sm text-cream/52">{booking.phone}</p>
+                <p className="mt-3 text-gold">{booking.date} · {booking.time}</p>
+                {booking.comment && <p className="mt-3 text-sm leading-6 text-cream/58">{booking.comment}</p>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gold/14 bg-ink/60 p-6 text-center text-cream/58">Броней пока нет.</div>
         )}
       </div>
 

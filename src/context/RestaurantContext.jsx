@@ -1,5 +1,18 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { restaurantData } from '../data.js';
+import {
+  databaseMode,
+  deleteMenuItem as deleteMenuItemFromDatabase,
+  ensureDatabaseSeed,
+  fetchDatabaseState,
+  isRemoteDatabaseEnabled,
+  saveBooking as saveBookingToDatabase,
+  saveMenuItem,
+  saveOrder as saveOrderToDatabase,
+  saveProfile as saveProfileToDatabase,
+  saveRestaurantSettings,
+  updateOrderStatus as updateOrderStatusInDatabase,
+} from '../services/database.js';
 
 const STORAGE_KEYS = {
   restaurant: 'restaurant-app-data',
@@ -81,13 +94,88 @@ export function RestaurantProvider({ children }) {
   const [user, setUser] = useState(() => readStorage(STORAGE_KEYS.authUser, null));
   const [profiles, setProfiles] = useState(() => readStorage(STORAGE_KEYS.profiles, {}));
   const [orders, setOrders] = useState(() => readStorage(STORAGE_KEYS.orders, []));
+  const [bookings, setBookings] = useState(() => readStorage(STORAGE_KEYS.bookings, []));
   const [bonusAccounts, setBonusAccounts] = useState(() => readStorage(STORAGE_KEYS.bonusAccounts, {}));
   const [bonusTransactions, setBonusTransactions] = useState(() => readStorage(STORAGE_KEYS.bonusTransactions, []));
   const [pendingLogin, setPendingLogin] = useState(null);
+  const [databaseStatus, setDatabaseStatus] = useState({
+    mode: databaseMode,
+    enabled: isRemoteDatabaseEnabled,
+    connected: false,
+    loading: isRemoteDatabaseEnabled,
+    error: '',
+  });
+
+  const pushRemote = (operation) => {
+    if (!isRemoteDatabaseEnabled || !operation) return;
+
+    Promise.resolve()
+      .then(operation)
+      .then(() => {
+        setDatabaseStatus((current) => ({ ...current, connected: true, loading: false, error: '' }));
+      })
+      .catch((error) => {
+        setDatabaseStatus((current) => ({
+          ...current,
+          connected: false,
+          loading: false,
+          error: error.message || 'Database sync error',
+        }));
+      });
+  };
+
+  const importRemoteState = (remoteState) => {
+    if (!remoteState) return;
+
+    const nextData = mergeData(remoteState.data || restaurantData);
+    setData(nextData);
+    writeStorage(STORAGE_KEYS.restaurant, nextData);
+
+    setProfiles(remoteState.profiles || {});
+    writeStorage(STORAGE_KEYS.profiles, remoteState.profiles || {});
+
+    setOrders(remoteState.orders || []);
+    writeStorage(STORAGE_KEYS.orders, remoteState.orders || []);
+
+    setBookings(remoteState.bookings || []);
+    writeStorage(STORAGE_KEYS.bookings, remoteState.bookings || []);
+
+    setBonusAccounts(remoteState.bonusAccounts || {});
+    writeStorage(STORAGE_KEYS.bonusAccounts, remoteState.bonusAccounts || {});
+
+    setBonusTransactions(remoteState.bonusTransactions || []);
+    writeStorage(STORAGE_KEYS.bonusTransactions, remoteState.bonusTransactions || []);
+  };
+
+  const reloadDatabase = async () => {
+    if (!isRemoteDatabaseEnabled) return;
+
+    setDatabaseStatus((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      await ensureDatabaseSeed(restaurantData);
+      const remoteState = await fetchDatabaseState();
+      importRemoteState(remoteState);
+      setDatabaseStatus((current) => ({ ...current, connected: true, loading: false, error: '' }));
+    } catch (error) {
+      setDatabaseStatus((current) => ({
+        ...current,
+        connected: false,
+        loading: false,
+        error: error.message || 'Database loading error',
+      }));
+    }
+  };
+
+  useEffect(() => {
+    reloadDatabase();
+    // Run once on startup: remote DB becomes the shared source of truth when enabled.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const persistData = (nextData) => {
     setData(nextData);
     writeStorage(STORAGE_KEYS.restaurant, nextData);
+    pushRemote(() => saveRestaurantSettings(nextData));
   };
 
   const persistCart = (nextCart) => {
@@ -103,6 +191,11 @@ export function RestaurantProvider({ children }) {
   const persistOrders = (nextOrders) => {
     setOrders(nextOrders);
     writeStorage(STORAGE_KEYS.orders, nextOrders);
+  };
+
+  const persistBookings = (nextBookings) => {
+    setBookings(nextBookings);
+    writeStorage(STORAGE_KEYS.bookings, nextBookings);
   };
 
   const persistBonusAccounts = (nextAccounts) => {
@@ -147,6 +240,7 @@ export function RestaurantProvider({ children }) {
     persistProfiles(nextProfiles);
     setUser(nextUser);
     writeStorage(STORAGE_KEYS.authUser, nextUser);
+    pushRemote(() => saveProfileToDatabase(nextProfile));
   };
 
   const addAddress = (address) => {
@@ -219,11 +313,13 @@ export function RestaurantProvider({ children }) {
     }
 
     const existingProfile = profiles[pendingLogin.normalizedPhone] || {};
+    const role = isAdminPhone(pendingLogin.normalizedPhone) ? 'admin' : 'client';
     const nextProfile = {
       ...existingProfile,
       name: pendingLogin.name,
       phone: pendingLogin.phone,
       normalizedPhone: pendingLogin.normalizedPhone,
+      role,
       addresses: existingProfile.addresses || [],
       cards: existingProfile.cards || [],
       createdAt: existingProfile.createdAt || new Date().toISOString(),
@@ -233,11 +329,12 @@ export function RestaurantProvider({ children }) {
       phone: pendingLogin.phone,
       normalizedPhone: pendingLogin.normalizedPhone,
       name: nextProfile.name,
-      role: isAdminPhone(pendingLogin.normalizedPhone) ? 'admin' : 'client',
+      role,
       loggedAt: new Date().toISOString(),
     };
 
     persistProfiles({ ...profiles, [pendingLogin.normalizedPhone]: nextProfile });
+    pushRemote(() => saveProfileToDatabase(nextProfile));
     setUser(nextUser);
     writeStorage(STORAGE_KEYS.authUser, nextUser);
     setPendingLogin(null);
@@ -339,36 +436,42 @@ export function RestaurantProvider({ children }) {
     persistOrders([orderWithBonus, ...orders]);
     persistBonusAccounts({ ...bonusAccounts, [normalizedPhone]: nextBalance });
     persistBonusTransactions([...newTransactions, ...bonusTransactions]);
+    pushRemote(() => saveOrderToDatabase(orderWithBonus, newTransactions, nextBalance));
     clearCart();
   };
 
   const updateOrderStatus = (orderId, status) => {
     const statusInfo = ORDER_STATUSES.find((item) => item.value === status);
+    const statusEvent = {
+      status,
+      label: statusInfo?.label || status,
+      createdAt: new Date().toISOString(),
+    };
     const nextOrders = orders.map((order) => {
       if (order.id !== orderId) return order;
       return {
         ...order,
         status,
-        statusHistory: [
-          {
-            status,
-            label: statusInfo?.label || status,
-            createdAt: new Date().toISOString(),
-          },
-          ...(order.statusHistory || []),
-        ],
+        deliveredAt: status === 'delivered' ? statusEvent.createdAt : order.deliveredAt,
+        statusHistory: [statusEvent, ...(order.statusHistory || [])],
       };
     });
 
     persistOrders(nextOrders);
+    pushRemote(() => updateOrderStatusInDatabase(orderId, status, statusEvent));
   };
 
   const submitBooking = (booking) => {
-    const bookings = readStorage(STORAGE_KEYS.bookings, []);
-    writeStorage(STORAGE_KEYS.bookings, [
-      { ...booking, id: createId(), createdAt: new Date().toISOString() },
-      ...bookings,
-    ]);
+    const bookingWithMeta = {
+      ...booking,
+      name: booking.name || user?.name || '',
+      phone: booking.phone || user?.phone || '',
+      normalizedPhone: user?.normalizedPhone || normalizePhone(booking.phone || ''),
+      id: createId(),
+      createdAt: new Date().toISOString(),
+    };
+    persistBookings([bookingWithMeta, ...bookings]);
+    pushRemote(() => saveBookingToDatabase(bookingWithMeta));
   };
 
   const updateRestaurant = (updates) => {
@@ -376,24 +479,32 @@ export function RestaurantProvider({ children }) {
   };
 
   const addDish = (dish) => {
+    const newDish = { ...dish, id: createId(), price: Number(dish.price) || 0, popular: false };
     persistData({
       ...data,
-      menuItems: [{ ...dish, id: createId(), price: Number(dish.price) || 0, popular: false }, ...data.menuItems],
+      menuItems: [newDish, ...data.menuItems],
     });
+    pushRemote(() => saveMenuItem(newDish));
   };
 
   const deleteDish = (id) => {
     persistData({ ...data, menuItems: data.menuItems.filter((dish) => dish.id !== id) });
     persistCart(cart.filter((item) => item.id !== id));
+    pushRemote(() => deleteMenuItemFromDatabase(id));
   };
 
   const updateDishPrice = (id, price) => {
     const value = Number(price) || 0;
+    const nextMenuItems = data.menuItems.map((dish) => (dish.id === id ? { ...dish, price: value } : dish));
     persistData({
       ...data,
-      menuItems: data.menuItems.map((dish) => (dish.id === id ? { ...dish, price: value } : dish)),
+      menuItems: nextMenuItems,
     });
     persistCart(cart.map((item) => (item.id === id ? { ...item, price: value } : item)));
+    const updatedDish = nextMenuItems.find((dish) => dish.id === id);
+    if (updatedDish) {
+      pushRemote(() => saveMenuItem(updatedDish));
+    }
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -440,6 +551,7 @@ export function RestaurantProvider({ children }) {
       profile,
       profiles,
       orders,
+      bookings,
       userOrders,
       notifications,
       loyaltySpend,
@@ -450,6 +562,8 @@ export function RestaurantProvider({ children }) {
       isAuthenticated,
       isAdmin,
       bonusBalance,
+      databaseStatus,
+      reloadDatabase,
       requestPhoneCode,
       verifyPhoneCode,
       logout,
@@ -479,10 +593,12 @@ export function RestaurantProvider({ children }) {
       user,
       profiles,
       orders,
+      bookings,
       pendingLogin,
       isAuthenticated,
       isAdmin,
       bonusBalance,
+      databaseStatus,
       bonusAccounts,
       bonusTransactions,
     ],

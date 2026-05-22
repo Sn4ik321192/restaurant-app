@@ -4,16 +4,16 @@ import { useRestaurant } from '../context/RestaurantContext.jsx';
 import AuthRequired from '../components/AuthRequired.jsx';
 
 export default function Booking() {
-  const { submitBooking, isAuthenticated, user } = useRestaurant();
+  const { submitBooking, isAuthenticated, user, profile, databaseStatus } = useRestaurant();
   const [sent, setSent] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: user?.phone || '', date: '', time: '', guests: '2', comment: '' });
+  const [form, setForm] = useState({ name: profile?.name || user?.name || '', phone: user?.phone || '', date: '', time: '', guests: '2', comment: '' });
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value });
 
   const onSubmit = (event) => {
     event.preventDefault();
     submitBooking(form);
     setSent(true);
-    setForm({ name: '', phone: user?.phone || '', date: '', time: '', guests: '2', comment: '' });
+    setForm({ name: profile?.name || user?.name || '', phone: user?.phone || '', date: '', time: '', guests: '2', comment: '' });
   };
 
   if (!isAuthenticated) {
@@ -31,7 +31,11 @@ export default function Booking() {
         <div className="animated-shell">
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Бронирование</p>
           <h1 className="mt-3 font-display text-5xl font-bold">Забронировать столик</h1>
-          <p className="mt-5 text-lg leading-8 text-cream/68">Заявка сохраняется локально. Для реального ресторана этот сценарий легко подключить к CRM, Telegram или email.</p>
+          <p className="mt-5 text-lg leading-8 text-cream/68">
+            {databaseStatus.enabled
+              ? 'Заявка сохраняется в общей базе данных и сразу появляется в админке.'
+              : 'Заявка сохраняется в демо-режиме localStorage. После подключения Supabase она будет уходить в общую базу данных.'}
+          </p>
         </div>
         <form onSubmit={onSubmit} className="glass animated-shell stagger-2 grid gap-5 rounded-[24px] p-6">
           {sent && <div className="rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">Заявка на бронь отправлена</div>}
