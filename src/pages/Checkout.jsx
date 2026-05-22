@@ -27,7 +27,7 @@ const paymentMethods = [
 ];
 
 export default function Checkout() {
-  const { cart, cartTotal, submitOrder, isAuthenticated, user, bonusBalance } = useRestaurant();
+  const { cart, cartTotal, submitOrder, isAuthenticated, user, profile, bonusBalance } = useRestaurant();
   const navigate = useNavigate();
   const [sent, setSent] = useState(false);
   const [deliveryType, setDeliveryType] = useState('delivery');
@@ -38,10 +38,20 @@ export default function Checkout() {
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [form, setForm] = useState({
-    name: '',
+    name: profile?.name || user?.name || '',
     phone: user?.phone || '',
-    address: '',
-    apartment: '',
+    address: profile?.defaultAddressId
+      ? (() => {
+          const address = (profile.addresses || []).find((item) => item.id === profile.defaultAddressId);
+          return address ? `${address.city}, ${address.street}, ${address.house}` : '';
+        })()
+      : '',
+    apartment: profile?.defaultAddressId
+      ? (() => {
+          const address = (profile.addresses || []).find((item) => item.id === profile.defaultAddressId);
+          return address ? `подъезд ${address.entrance || '-'}, этаж ${address.floor || '-'}, кв. ${address.apartment || '-'}` : '';
+        })()
+      : '',
     changeFrom: '',
     comment: '',
     date: '',

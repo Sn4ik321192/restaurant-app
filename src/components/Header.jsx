@@ -67,7 +67,7 @@ export default function Header() {
           {user ? (
             <div className="hidden items-center gap-2 rounded-full border border-cream/10 bg-cream/5 px-3 py-2 text-sm text-cream/75 sm:flex">
               <UserRound size={16} className="text-gold" />
-              <span>{user.phone}</span>
+              <Link to="/account" className="font-bold transition hover:text-gold">Мой профиль</Link>
               <button type="button" onClick={logout} className="grid h-7 w-7 place-items-center rounded-full text-cream/55 transition hover:bg-cream/10 hover:text-gold" aria-label="Выйти">
                 <LogOut size={15} />
               </button>

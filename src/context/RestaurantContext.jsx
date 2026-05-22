@@ -8,7 +8,23 @@ const STORAGE_KEYS = {
   bookings: 'restaurant-app-bookings',
   authUser: 'restaurant-app-auth-user',
   bonusAccounts: 'restaurant-app-bonus-accounts',
+  bonusTransactions: 'restaurant-app-bonus-transactions',
+  profiles: 'restaurant-app-profiles',
 };
+
+export const ORDER_STATUSES = [
+  { value: 'processed', label: 'Заказ обработан' },
+  { value: 'cooking', label: 'Заказ готовится' },
+  { value: 'delivering', label: 'Заказ передан курьеру' },
+  { value: 'delivered', label: 'Заказ доставлен' },
+];
+
+export const LOYALTY_RANKS = [
+  { name: 'Bronze', threshold: 0 },
+  { name: 'Silver', threshold: 1000 },
+  { name: 'Gold', threshold: 3000 },
+  { name: 'Platinum', threshold: 7000 },
+];
 
 const RestaurantContext = createContext(null);
 
@@ -20,7 +36,7 @@ const createId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-export const normalizePhone = (phone) => phone.replace(/\D/g, '');
+export const normalizePhone = (phone = '') => phone.replace(/\D/g, '');
 
 const createDemoCode = () => String(Math.floor(1000 + Math.random() * 9000));
 
@@ -63,7 +79,10 @@ export function RestaurantProvider({ children }) {
   const [data, setData] = useState(() => mergeData(readStorage(STORAGE_KEYS.restaurant, restaurantData)));
   const [cart, setCart] = useState(() => readStorage(STORAGE_KEYS.cart, []));
   const [user, setUser] = useState(() => readStorage(STORAGE_KEYS.authUser, null));
+  const [profiles, setProfiles] = useState(() => readStorage(STORAGE_KEYS.profiles, {}));
+  const [orders, setOrders] = useState(() => readStorage(STORAGE_KEYS.orders, []));
   const [bonusAccounts, setBonusAccounts] = useState(() => readStorage(STORAGE_KEYS.bonusAccounts, {}));
+  const [bonusTransactions, setBonusTransactions] = useState(() => readStorage(STORAGE_KEYS.bonusTransactions, []));
   const [pendingLogin, setPendingLogin] = useState(null);
 
   const persistData = (nextData) => {
@@ -76,14 +95,24 @@ export function RestaurantProvider({ children }) {
     writeStorage(STORAGE_KEYS.cart, nextCart);
   };
 
+  const persistProfiles = (nextProfiles) => {
+    setProfiles(nextProfiles);
+    writeStorage(STORAGE_KEYS.profiles, nextProfiles);
+  };
+
+  const persistOrders = (nextOrders) => {
+    setOrders(nextOrders);
+    writeStorage(STORAGE_KEYS.orders, nextOrders);
+  };
+
   const persistBonusAccounts = (nextAccounts) => {
     setBonusAccounts(nextAccounts);
     writeStorage(STORAGE_KEYS.bonusAccounts, nextAccounts);
   };
 
-  const getBonusBalance = (phone = user?.normalizedPhone) => {
-    if (!phone) return 0;
-    return Number(bonusAccounts[normalizePhone(phone)] || 0);
+  const persistBonusTransactions = (nextTransactions) => {
+    setBonusTransactions(nextTransactions);
+    writeStorage(STORAGE_KEYS.bonusTransactions, nextTransactions);
   };
 
   const isAdminPhone = (phone) => {
@@ -91,15 +120,90 @@ export function RestaurantProvider({ children }) {
     return (data.admin.phoneNumbers || []).map(normalizePhone).includes(normalized);
   };
 
-  const requestPhoneCode = (phone) => {
+  const getBonusBalance = (phone = user?.normalizedPhone) => {
+    if (!phone) return 0;
+    return Number(bonusAccounts[normalizePhone(phone)] || 0);
+  };
+
+  const getProfile = (phone = user?.normalizedPhone) => {
+    if (!phone) return null;
+    return profiles[normalizePhone(phone)] || null;
+  };
+
+  const updateProfile = (updates) => {
+    if (!user?.normalizedPhone) return;
+
+    const currentProfile = getProfile() || {};
+    const nextProfile = {
+      ...currentProfile,
+      ...updates,
+      phone: user.phone,
+      normalizedPhone: user.normalizedPhone,
+      updatedAt: new Date().toISOString(),
+    };
+    const nextProfiles = { ...profiles, [user.normalizedPhone]: nextProfile };
+    const nextUser = { ...user, name: nextProfile.name || user.name };
+
+    persistProfiles(nextProfiles);
+    setUser(nextUser);
+    writeStorage(STORAGE_KEYS.authUser, nextUser);
+  };
+
+  const addAddress = (address) => {
+    if (!user?.normalizedPhone) return;
+    const currentProfile = getProfile() || {};
+    const addressWithId = { ...address, id: createId(), createdAt: new Date().toISOString() };
+    const addresses = [...(currentProfile.addresses || []), addressWithId];
+    updateProfile({
+      addresses,
+      defaultAddressId: address.useDefault || !currentProfile.defaultAddressId ? addressWithId.id : currentProfile.defaultAddressId,
+    });
+  };
+
+  const deleteAddress = (id) => {
+    const currentProfile = getProfile() || {};
+    const addresses = (currentProfile.addresses || []).filter((address) => address.id !== id);
+    updateProfile({
+      addresses,
+      defaultAddressId: currentProfile.defaultAddressId === id ? addresses[0]?.id || null : currentProfile.defaultAddressId,
+    });
+  };
+
+  const setDefaultAddress = (id) => updateProfile({ defaultAddressId: id });
+
+  const addCard = (card) => {
+    if (!user?.normalizedPhone) return;
+    const currentProfile = getProfile() || {};
+    const digits = normalizePhone(card.number);
+    const cardWithId = {
+      id: createId(),
+      holder: card.holder,
+      expiry: card.expiry,
+      last4: digits.slice(-4),
+      createdAt: new Date().toISOString(),
+    };
+    updateProfile({ cards: [...(currentProfile.cards || []), cardWithId] });
+  };
+
+  const deleteCard = (id) => {
+    const currentProfile = getProfile() || {};
+    updateProfile({ cards: (currentProfile.cards || []).filter((card) => card.id !== id) });
+  };
+
+  const requestPhoneCode = (phone, name = '') => {
     const normalizedPhone = normalizePhone(phone);
+    const trimmedName = name.trim();
 
     if (normalizedPhone.length < 7) {
       return { ok: false, error: 'Введите корректный номер телефона' };
     }
 
+    if (trimmedName.length < 2) {
+      return { ok: false, error: 'Введите имя' };
+    }
+
     const code = createDemoCode();
-    const login = { phone, normalizedPhone, code };
+    const login = { phone, normalizedPhone, name: trimmedName, code };
     setPendingLogin(login);
 
     return { ok: true, code };
@@ -114,13 +218,26 @@ export function RestaurantProvider({ children }) {
       return { ok: false, error: 'Неверный код подтверждения' };
     }
 
+    const existingProfile = profiles[pendingLogin.normalizedPhone] || {};
+    const nextProfile = {
+      ...existingProfile,
+      name: pendingLogin.name,
+      phone: pendingLogin.phone,
+      normalizedPhone: pendingLogin.normalizedPhone,
+      addresses: existingProfile.addresses || [],
+      cards: existingProfile.cards || [],
+      createdAt: existingProfile.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
     const nextUser = {
       phone: pendingLogin.phone,
       normalizedPhone: pendingLogin.normalizedPhone,
+      name: nextProfile.name,
       role: isAdminPhone(pendingLogin.normalizedPhone) ? 'admin' : 'client',
       loggedAt: new Date().toISOString(),
     };
 
+    persistProfiles({ ...profiles, [pendingLogin.normalizedPhone]: nextProfile });
     setUser(nextUser);
     writeStorage(STORAGE_KEYS.authUser, nextUser);
     setPendingLogin(null);
@@ -164,27 +281,86 @@ export function RestaurantProvider({ children }) {
   const clearCart = () => persistCart([]);
 
   const submitOrder = (order) => {
-    const orders = readStorage(STORAGE_KEYS.orders, []);
     const normalizedPhone = user?.normalizedPhone || normalizePhone(order.customer?.phone || '');
     const spentBonuses = Math.max(0, Number(order.checkout?.bonusPoints || 0));
     const earnBase = Math.max(0, Number(order.total || 0));
     const earnedBonuses = Math.floor(earnBase * 0.05);
     const currentBalance = getBonusBalance(normalizedPhone);
     const nextBalance = Math.max(0, currentBalance - spentBonuses) + earnedBonuses;
+    const createdAt = new Date().toISOString();
     const orderWithBonus = {
       ...order,
+      phone: normalizedPhone,
+      customer: {
+        ...order.customer,
+        name: order.customer?.name || user?.name || getProfile(normalizedPhone)?.name || '',
+        phone: order.customer?.phone || user?.phone || '',
+      },
+      status: 'processed',
+      statusHistory: [
+        {
+          status: 'processed',
+          label: 'Заказ обработан',
+          createdAt,
+        },
+      ],
       bonus: {
         spent: spentBonuses,
         earned: earnedBonuses,
         balanceAfter: nextBalance,
       },
       id: createId(),
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
+    const newTransactions = [];
 
-    writeStorage(STORAGE_KEYS.orders, [orderWithBonus, ...orders]);
+    if (spentBonuses > 0) {
+      newTransactions.push({
+        id: createId(),
+        phone: normalizedPhone,
+        type: 'spent',
+        amount: -spentBonuses,
+        description: 'Списание за заказ',
+        createdAt,
+      });
+    }
+
+    if (earnedBonuses > 0) {
+      newTransactions.push({
+        id: createId(),
+        phone: normalizedPhone,
+        type: 'earned',
+        amount: earnedBonuses,
+        description: 'Начисление за заказ',
+        createdAt,
+      });
+    }
+
+    persistOrders([orderWithBonus, ...orders]);
     persistBonusAccounts({ ...bonusAccounts, [normalizedPhone]: nextBalance });
+    persistBonusTransactions([...newTransactions, ...bonusTransactions]);
     clearCart();
+  };
+
+  const updateOrderStatus = (orderId, status) => {
+    const statusInfo = ORDER_STATUSES.find((item) => item.value === status);
+    const nextOrders = orders.map((order) => {
+      if (order.id !== orderId) return order;
+      return {
+        ...order,
+        status,
+        statusHistory: [
+          {
+            status,
+            label: statusInfo?.label || status,
+            createdAt: new Date().toISOString(),
+          },
+          ...(order.statusHistory || []),
+        ],
+      };
+    });
+
+    persistOrders(nextOrders);
   };
 
   const submitBooking = (booking) => {
@@ -225,6 +401,34 @@ export function RestaurantProvider({ children }) {
   const isAuthenticated = Boolean(user);
   const isAdmin = Boolean(user && isAdminPhone(user.normalizedPhone));
   const bonusBalance = getBonusBalance();
+  const profile = getProfile();
+  const userOrders = user?.normalizedPhone ? orders.filter((order) => order.phone === user.normalizedPhone) : [];
+  const userBonusTransactions = user?.normalizedPhone
+    ? bonusTransactions.filter((transaction) => transaction.phone === user.normalizedPhone)
+    : [];
+  const loyaltySpend = userOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const currentRank = [...LOYALTY_RANKS].reverse().find((rank) => loyaltySpend >= rank.threshold) || LOYALTY_RANKS[0];
+  const nextRank = LOYALTY_RANKS.find((rank) => rank.threshold > loyaltySpend) || null;
+  const notifications = user
+    ? [
+        {
+          id: 'promo-welcome',
+          title: 'Новинки и промокоды',
+          text: 'Следите за скидками, сезонными блюдами и персональными предложениями.',
+          createdAt: new Date().toISOString(),
+          type: 'promo',
+        },
+        ...userOrders.flatMap((order) =>
+          (order.statusHistory || []).map((event) => ({
+            id: `${order.id}-${event.status}-${event.createdAt}`,
+            title: event.label,
+            text: `Заказ #${order.id.slice(0, 6)}: ${event.label.toLowerCase()}.`,
+            createdAt: event.createdAt,
+            type: 'order',
+          })),
+        ),
+      ]
+    : [];
 
   const value = useMemo(
     () => ({
@@ -233,6 +437,15 @@ export function RestaurantProvider({ children }) {
       cartTotal,
       cartCount,
       user,
+      profile,
+      profiles,
+      orders,
+      userOrders,
+      notifications,
+      loyaltySpend,
+      currentRank,
+      nextRank,
+      userBonusTransactions,
       pendingLogin,
       isAuthenticated,
       isAdmin,
@@ -240,18 +453,39 @@ export function RestaurantProvider({ children }) {
       requestPhoneCode,
       verifyPhoneCode,
       logout,
+      updateProfile,
+      addAddress,
+      deleteAddress,
+      setDefaultAddress,
+      addCard,
+      deleteCard,
       addToCart,
       updateQuantity,
       removeFromCart,
       clearCart,
       submitOrder,
+      updateOrderStatus,
       submitBooking,
       updateRestaurant,
       addDish,
       deleteDish,
       updateDishPrice,
     }),
-    [data, cart, cartTotal, cartCount, user, pendingLogin, isAuthenticated, isAdmin, bonusBalance, bonusAccounts],
+    [
+      data,
+      cart,
+      cartTotal,
+      cartCount,
+      user,
+      profiles,
+      orders,
+      pendingLogin,
+      isAuthenticated,
+      isAdmin,
+      bonusBalance,
+      bonusAccounts,
+      bonusTransactions,
+    ],
   );
 
   return <RestaurantContext.Provider value={value}>{children}</RestaurantContext.Provider>;

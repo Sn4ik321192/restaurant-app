@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Phone, ShieldCheck } from 'lucide-react';
+import { MessageCircle, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import FormField, { inputClass } from '../components/FormField.jsx';
 import { useRestaurant } from '../context/RestaurantContext.jsx';
 
@@ -8,6 +8,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, isAdmin, pendingLogin, requestPhoneCode, verifyPhoneCode } = useRestaurant();
+  const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [demoCode, setDemoCode] = useState('');
@@ -21,7 +22,7 @@ export default function Login() {
 
   const sendCode = (event) => {
     event.preventDefault();
-    const result = requestPhoneCode(phone);
+    const result = requestPhoneCode(phone, name);
 
     if (!result.ok) {
       setError(result.error);
@@ -51,7 +52,7 @@ export default function Login() {
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Аккаунт</p>
           <h1 className="mt-3 font-display text-5xl font-bold">Вход по номеру телефона</h1>
           <p className="mt-5 text-lg leading-8 text-cream/68">
-            После подтверждения номера можно добавлять блюда, оформлять заказ и бронировать столик. Если номер есть в списке администраторов, откроется панель управления.
+            Введите имя и телефон, получите код подтверждения и пользуйтесь заказами, бронью, бонусами и личным профилем.
           </p>
           <div className="mt-7 grid gap-3 text-sm text-cream/68">
             <p className="flex items-center gap-3"><Phone className="text-gold" size={18} /> Только номер телефона, без почты и пароля.</p>
@@ -63,8 +64,17 @@ export default function Login() {
           {!pendingLogin ? (
             <form onSubmit={sendCode} className="grid gap-5">
               <div className="grid h-14 w-14 place-items-center rounded-full border border-gold/25 bg-gold/10 text-gold">
-                <Phone size={24} />
+                <UserRound size={24} />
               </div>
+              <FormField label="Имя">
+                <input
+                  required
+                  className={inputClass}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Александр"
+                />
+              </FormField>
               <FormField label="Номер телефона">
                 <input
                   required

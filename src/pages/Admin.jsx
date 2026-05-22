@@ -3,10 +3,10 @@ import { LogOut, Plus, Save, ShieldAlert, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AuthRequired from '../components/AuthRequired.jsx';
 import FormField, { inputClass } from '../components/FormField.jsx';
-import { useRestaurant } from '../context/RestaurantContext.jsx';
+import { ORDER_STATUSES, useRestaurant } from '../context/RestaurantContext.jsx';
 
 export default function Admin() {
-  const { data, isAuthenticated, isAdmin, user, logout, updateRestaurant, addDish, deleteDish, updateDishPrice } = useRestaurant();
+  const { data, orders, isAuthenticated, isAdmin, user, logout, updateRestaurant, addDish, deleteDish, updateDishPrice, updateOrderStatus } = useRestaurant();
   const [restaurant, setRestaurant] = useState({
     name: data.restaurant.name,
     phone: data.restaurant.phone,
@@ -118,6 +118,38 @@ export default function Admin() {
         </button>
       </div>
       {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
+
+      <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">
+        <h2 className="mb-2 text-2xl font-bold">Заказы и статусы</h2>
+        <p className="mb-5 text-sm text-cream/58">Админ или курьер меняет статус, а клиент видит уведомление в профиле.</p>
+        {orders.length ? (
+          <div className="space-y-3">
+            {orders.map((order) => (
+              <div key={order.id} className="grid gap-4 rounded-2xl border border-cream/8 bg-ink/60 p-4 lg:grid-cols-[1fr_260px] lg:items-center">
+                <div>
+                  <p className="font-bold">Заказ #{order.id.slice(0, 6)} · {order.customer?.name || 'Клиент'}</p>
+                  <p className="mt-1 text-sm text-cream/52">{order.customer?.phone} · {order.total} MDL</p>
+                  <p className="mt-2 text-sm text-gold">{(order.statusHistory || [])[0]?.label || 'Заказ обработан'}</p>
+                </div>
+                <select
+                  className={inputClass}
+                  value={order.status || 'processed'}
+                  onChange={(event) => {
+                    updateOrderStatus(order.id, event.target.value);
+                    showNotice('Статус заказа обновлен');
+                  }}
+                >
+                  {ORDER_STATUSES.map((status) => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gold/14 bg-ink/60 p-6 text-center text-cream/58">Заказов пока нет.</div>
+        )}
+      </div>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-2">
         <form onSubmit={saveRestaurant} className="glass animated-shell grid gap-5 rounded-[24px] p-6">
