@@ -13,6 +13,7 @@ import {
   saveRestaurantSettings,
   updateOrderStatus as updateOrderStatusInDatabase,
 } from '../services/database.js';
+import { authMode, isSmsAuthEnabled, sendSmsCode, verifySmsCode } from '../services/auth.js';
 
 const STORAGE_KEYS = {
   restaurant: 'restaurant-app-data',
@@ -105,6 +106,10 @@ export function RestaurantProvider({ children }) {
     loading: isRemoteDatabaseEnabled,
     error: '',
   });
+  const authStatus = {
+    mode: authMode,
+    smsEnabled: isSmsAuthEnabled,
+  };
 
   const pushRemote = (operation) => {
     if (!isRemoteDatabaseEnabled || !operation) return;
@@ -284,7 +289,7 @@ export function RestaurantProvider({ children }) {
     updateProfile({ cards: (currentProfile.cards || []).filter((card) => card.id !== id) });
   };
 
-  const requestPhoneCode = (phone, name = '') => {
+  const requestPhoneCode = async (phone, name = '') => {
     const normalizedPhone = normalizePhone(phone);
     const trimmedName = name.trim();
 
@@ -296,19 +301,42 @@ export function RestaurantProvider({ children }) {
       return { ok: false, error: 'Введите имя' };
     }
 
+    if (isSmsAuthEnabled) {
+      try {
+        await sendSmsCode(phone);
+        const login = { phone, normalizedPhone, name: trimmedName, code: null, authMode: 'sms' };
+        setPendingLogin(login);
+        return { ok: true, sms: true };
+      } catch (error) {
+        return {
+          ok: false,
+          error: `Не удалось отправить SMS. Проверьте Phone Auth и SMS provider в Supabase. ${error.message || ''}`,
+        };
+      }
+    }
+
     const code = createDemoCode();
-    const login = { phone, normalizedPhone, name: trimmedName, code };
+    const login = { phone, normalizedPhone, name: trimmedName, code, authMode: 'demo' };
     setPendingLogin(login);
 
     return { ok: true, code };
   };
 
-  const verifyPhoneCode = (code) => {
+  const verifyPhoneCode = async (code) => {
     if (!pendingLogin) {
       return { ok: false, error: 'Сначала запросите код подтверждения' };
     }
 
-    if (String(code).trim() !== pendingLogin.code) {
+    if (pendingLogin.authMode === 'sms') {
+      try {
+        await verifySmsCode(pendingLogin.phone, String(code).trim());
+      } catch (error) {
+        return {
+          ok: false,
+          error: `Неверный SMS-код или Supabase отклонил проверку. ${error.message || ''}`,
+        };
+      }
+    } else if (String(code).trim() !== pendingLogin.code) {
       return { ok: false, error: 'Неверный код подтверждения' };
     }
 
@@ -563,6 +591,7 @@ export function RestaurantProvider({ children }) {
       isAdmin,
       bonusBalance,
       databaseStatus,
+      authStatus,
       reloadDatabase,
       requestPhoneCode,
       verifyPhoneCode,

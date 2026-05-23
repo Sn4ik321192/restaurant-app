@@ -41,11 +41,18 @@ npm run dev
 
 ```env
 VITE_DB_PROVIDER=supabase
+VITE_AUTH_PROVIDER=demo
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
 ```
 
 Если эти переменные не указаны, сайт автоматически работает в режиме `localStorage`.
+
+Для настоящего SMS-кода включите Phone Auth и SMS provider в Supabase, затем замените:
+
+```env
+VITE_AUTH_PROVIDER=supabase
+```
 
 ## Публикация
 
@@ -58,6 +65,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-public-key
 Для публикации с Supabase добавьте эти секреты в GitHub Actions:
 
 - `VITE_DB_PROVIDER`
+- `VITE_AUTH_PROVIDER`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
@@ -67,10 +75,10 @@ VITE_SUPABASE_ANON_KEY=your-anon-public-key
 
 1. Пользователь вводит номер.
 2. Приложение генерирует код подтверждения.
-3. В демо-версии код показывается на экране.
+3. В демо-режиме код показывается на экране, а в режиме `VITE_AUTH_PROVIDER=supabase` код отправляется через Supabase Phone Auth.
 4. После ввода кода пользователь получает доступ к корзине, заказу и бронированию.
 
-Для реального проекта отправку SMS нужно подключить через backend и SMS-провайдера.
+Для реального проекта отправку SMS нужно включить в Supabase: `Authentication` → `Sign In / Providers` → `Phone`, затем настроить SMS provider.
 
 ## Администраторы
 

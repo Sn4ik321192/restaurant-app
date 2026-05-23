@@ -7,12 +7,13 @@ import { useRestaurant } from '../context/RestaurantContext.jsx';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isAdmin, pendingLogin, requestPhoneCode, verifyPhoneCode } = useRestaurant();
+  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestPhoneCode, verifyPhoneCode } = useRestaurant();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [demoCode, setDemoCode] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const from = location.state?.from || (isAdmin ? '/admin' : '/');
 
@@ -20,22 +21,26 @@ export default function Login() {
     return <Navigate to={from} replace />;
   }
 
-  const sendCode = (event) => {
+  const sendCode = async (event) => {
     event.preventDefault();
-    const result = requestPhoneCode(phone, name);
+    setLoading(true);
+    const result = await requestPhoneCode(phone, name);
+    setLoading(false);
 
     if (!result.ok) {
       setError(result.error);
       return;
     }
 
-    setDemoCode(result.code);
+    setDemoCode(result.code || '');
     setError('');
   };
 
-  const confirmCode = (event) => {
+  const confirmCode = async (event) => {
     event.preventDefault();
-    const result = verifyPhoneCode(code);
+    setLoading(true);
+    const result = await verifyPhoneCode(code);
+    setLoading(false);
 
     if (!result.ok) {
       setError(result.error);
@@ -86,8 +91,8 @@ export default function Login() {
                 />
               </FormField>
               {error && <p className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</p>}
-              <button className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
-                Получить код
+              <button disabled={loading} className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60">
+                {loading ? 'Отправляем...' : authStatus.smsEnabled ? 'Получить SMS-код' : 'Получить код'}
               </button>
             </form>
           ) : (
@@ -97,7 +102,11 @@ export default function Login() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold">Введите код из SMS</h2>
-                <p className="mt-2 text-sm text-cream/60">Код отправлен на {pendingLogin.phone}</p>
+                <p className="mt-2 text-sm text-cream/60">
+                  {pendingLogin.authMode === 'sms'
+                    ? `SMS отправлено на ${pendingLogin.phone}`
+                    : `Демо-код создан для ${pendingLogin.phone}`}
+                </p>
               </div>
               <FormField label="Код подтверждения">
                 <input
@@ -110,12 +119,14 @@ export default function Login() {
                   placeholder="0000"
                 />
               </FormField>
-              <div className="rounded-2xl border border-gold/20 bg-gold/10 p-4 text-sm text-gold">
-                Демо-код: <span className="font-extrabold">{demoCode || pendingLogin.code}</span>
-              </div>
+              {pendingLogin.authMode !== 'sms' && (
+                <div className="rounded-2xl border border-gold/20 bg-gold/10 p-4 text-sm text-gold">
+                  Демо-код: <span className="font-extrabold">{demoCode || pendingLogin.code}</span>
+                </div>
+              )}
               {error && <p className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</p>}
-              <button className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
-                Войти
+              <button disabled={loading} className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60">
+                {loading ? 'Проверяем...' : 'Войти'}
               </button>
             </form>
           )}

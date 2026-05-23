@@ -44,6 +44,7 @@
 
 ```env
 VITE_DB_PROVIDER=supabase
+VITE_AUTH_PROVIDER=demo
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
 ```
@@ -57,7 +58,29 @@ npm run dev
 
 Если переменные не указаны, сайт автоматически вернется в демо-режим `localStorage`.
 
-## 4. Как данные попадают в БД
+## 4. Настроить реальную отправку SMS-кода
+
+По умолчанию вход работает в демо-режиме:
+
+```env
+VITE_AUTH_PROVIDER=demo
+```
+
+Чтобы код реально приходил в SMS:
+
+1. В Supabase откройте `Authentication`.
+2. Перейдите в `Sign In / Providers`.
+3. Включите `Phone`.
+4. Настройте SMS provider в Supabase.
+5. После этого поменяйте переменную:
+
+```env
+VITE_AUTH_PROVIDER=supabase
+```
+
+Если SMS provider не настроен, Supabase не сможет доставить OTP-код, и вход будет показывать ошибку.
+
+## 5. Как данные попадают в БД
 
 - Первый запуск с Supabase автоматически закидывает стартовые настройки ресторана и меню из `src/data.js`, если таблицы пустые.
 - Клиент входит по номеру и имени, профиль сохраняется в `profiles`.
@@ -70,7 +93,7 @@ npm run dev
 - Бронь столика сохраняется в `bookings`.
 - Админ меняет статус заказа, клиент видит уведомление в профиле.
 
-## 5. Автоудаление готовых заказов
+## 6. Автоудаление готовых заказов
 
 В `database/schema.sql` уже есть функция:
 
@@ -94,7 +117,7 @@ select cron.schedule(
 
 Число `30` можно заменить на `7`, `14`, `60` и так далее.
 
-## 6. Подключить БД на GitHub Pages
+## 7. Подключить БД на GitHub Pages
 
 В GitHub откройте репозиторий:
 
@@ -103,6 +126,7 @@ select cron.schedule(
 Добавьте:
 
 - `VITE_DB_PROVIDER` = `supabase`
+- `VITE_AUTH_PROVIDER` = `demo` или `supabase`
 - `VITE_SUPABASE_URL` = ваш `Project URL`
 - `VITE_SUPABASE_ANON_KEY` = ваш `anon public key`
 
