@@ -2,8 +2,8 @@ const provider = import.meta.env.VITE_AUTH_PROVIDER || 'demo';
 const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-export const isSmsAuthEnabled = provider === 'supabase' && Boolean(supabaseUrl && supabaseKey);
-export const authMode = isSmsAuthEnabled ? 'supabase-sms' : 'demo-code';
+export const isEmailAuthEnabled = provider === 'supabase' && Boolean(supabaseUrl && supabaseKey);
+export const authMode = isEmailAuthEnabled ? 'supabase-email' : 'demo-code';
 
 async function authRequest(path, body) {
   const response = await fetch(`${supabaseUrl}/auth/v1/${path}`, {
@@ -18,31 +18,31 @@ async function authRequest(path, body) {
   const text = await response.text();
 
   if (!response.ok) {
-    throw new Error(text || 'SMS auth request failed');
+    throw new Error(text || 'Auth request failed');
   }
 
   return text ? JSON.parse(text) : null;
 }
 
-export async function sendSmsCode(phone) {
-  if (!isSmsAuthEnabled) {
+export async function sendEmailCode(email) {
+  if (!isEmailAuthEnabled) {
     return null;
   }
 
   return authRequest('otp', {
-    phone,
+    email,
     create_user: true,
   });
 }
 
-export async function verifySmsCode(phone, token) {
-  if (!isSmsAuthEnabled) {
+export async function verifyEmailCode(email, token) {
+  if (!isEmailAuthEnabled) {
     return null;
   }
 
   return authRequest('verify', {
-    phone,
+    email,
     token,
-    type: 'sms',
+    type: 'email',
   });
 }

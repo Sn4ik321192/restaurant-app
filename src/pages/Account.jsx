@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Bell,
   CreditCard,
@@ -36,6 +36,8 @@ export default function Account() {
     profile,
     isAuthenticated,
     isAdmin,
+    hasContactPhone,
+    contactPhone,
     bonusBalance,
     userOrders,
     notifications,
@@ -55,6 +57,7 @@ export default function Account() {
   const [addressFormOpen, setAddressFormOpen] = useState(false);
   const [personalForm, setPersonalForm] = useState({
     name: profile?.name || user?.name || '',
+    phone: contactPhone || '',
     birthDate: profile?.birthDate || '',
     gender: profile?.gender || 'Не важно',
   });
@@ -69,6 +72,15 @@ export default function Account() {
   });
   const [cardForm, setCardForm] = useState({ number: '', holder: '', expiry: '' });
   const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    setPersonalForm({
+      name: profile?.name || user?.name || '',
+      phone: profile?.phone || user?.phone || '',
+      birthDate: profile?.birthDate || '',
+      gender: profile?.gender || 'Не важно',
+    });
+  }, [profile?.name, profile?.phone, profile?.birthDate, profile?.gender, user?.name, user?.phone]);
 
   if (!isAuthenticated) {
     return (
@@ -116,7 +128,7 @@ export default function Account() {
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Мой профиль</p>
           <h1 className="mt-3 font-display text-5xl font-bold">{profile?.name || user.name || 'Гость'}</h1>
-          <p className="mt-3 text-cream/62">{user.phone}</p>
+          <p className="mt-3 text-cream/62">{user.email || user.phone}</p>
         </div>
         <button
           type="button"
@@ -128,6 +140,21 @@ export default function Account() {
       </div>
 
       {notice && <div className="mb-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
+      {!hasContactPhone && (
+        <div className="mb-6 rounded-[24px] border border-red-300/20 bg-red-500/10 p-5">
+          <p className="text-lg font-extrabold text-red-100">Добавьте номер телефона</p>
+          <p className="mt-2 text-sm leading-6 text-cream/68">
+            Ресторану нужен телефон, чтобы администратор мог позвонить и уточнить заказ или бронь. Оформление заказа и бронь будут доступны после сохранения номера.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveSection('personal')}
+            className="mt-4 rounded-full bg-gold px-5 py-3 font-extrabold text-ink hover:bg-cream"
+          >
+            Заполнить телефон
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[290px_1fr]">
         <aside className="glass h-fit rounded-[28px] p-3">
@@ -150,6 +177,11 @@ export default function Account() {
             {isAdmin && (
               <Link to="/admin" className="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold text-gold hover:bg-cream/8">
                 <ShieldCheck size={19} /> Панель администратора
+              </Link>
+            )}
+            {isAdmin && (
+              <Link to="/admin/orders" className="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold text-gold hover:bg-cream/8">
+                <History size={19} /> Заказы
               </Link>
             )}
           </div>
@@ -241,9 +273,10 @@ export default function Account() {
           )}
 
           {activeSection === 'personal' && (
-            <ProfilePanel title="Личные данные" text="Имя, дата рождения и пол. Эти данные можно менять в любой момент.">
+            <ProfilePanel title="Личные данные" text="Имя, телефон для связи, дата рождения и пол. Эти данные можно менять в любой момент.">
               <form onSubmit={savePersonal} className="grid gap-5">
                 <FormField label="Имя"><input required className={inputClass} value={personalForm.name} onChange={(event) => setPersonalForm({ ...personalForm, name: event.target.value })} /></FormField>
+                <FormField label="Телефон для уточнения заказа"><input required className={inputClass} type="tel" value={personalForm.phone} onChange={(event) => setPersonalForm({ ...personalForm, phone: event.target.value })} placeholder="+373 68 123 456" /></FormField>
                 <FormField label="Дата рождения"><input className={inputClass} type="date" value={personalForm.birthDate} onChange={(event) => setPersonalForm({ ...personalForm, birthDate: event.target.value })} /></FormField>
                 <div>
                   <p className="mb-3 text-sm font-bold text-cream/82">Пол</p>

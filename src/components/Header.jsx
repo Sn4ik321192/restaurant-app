@@ -58,10 +58,10 @@ export default function Header() {
           </Link>
           {isAdmin && (
             <Link
-              to="/admin"
+              to="/admin/orders"
               className="hidden items-center gap-2 rounded-full border border-gold/25 px-4 py-2 text-sm font-bold text-gold transition hover:bg-gold hover:text-ink sm:inline-flex"
             >
-              <ShieldCheck size={17} /> Admin
+              <ShieldCheck size={17} /> Заказы
             </Link>
           )}
           {user ? (

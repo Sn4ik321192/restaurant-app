@@ -19,7 +19,7 @@ export default function AuthRequired({ title, text }) {
           state={{ from: location.pathname }}
           className="shine mt-7 inline-flex rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream"
         >
-          Войти по телефону
+          Войти по почте
         </Link>
       </div>
     </section>

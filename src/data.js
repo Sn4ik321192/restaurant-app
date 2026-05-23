@@ -1,6 +1,7 @@
 export const restaurantData = {
   admin: {
     phoneNumbers: ['+37377432554', '+37361058107'],
+    emails: ['admin@restaurant.app'],
   },
   restaurant: {
     name: 'Restaurant App',

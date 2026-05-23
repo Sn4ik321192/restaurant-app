@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Database, LogOut, Plus, RefreshCw, Save, ShieldAlert, Trash2 } from 'lucide-react';
+import { ClipboardList, Database, LogOut, Plus, RefreshCw, Save, ShieldAlert, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AuthRequired from '../components/AuthRequired.jsx';
 import FormField, { inputClass } from '../components/FormField.jsx';
-import { ORDER_STATUSES, useRestaurant } from '../context/RestaurantContext.jsx';
+import { useRestaurant } from '../context/RestaurantContext.jsx';
 
 export default function Admin() {
   const {
     data,
-    orders,
     bookings,
     databaseStatus,
     isAuthenticated,
@@ -19,7 +18,6 @@ export default function Admin() {
     addDish,
     deleteDish,
     updateDishPrice,
-    updateOrderStatus,
     reloadDatabase,
   } = useRestaurant();
   const [restaurant, setRestaurant] = useState({
@@ -90,7 +88,7 @@ export default function Admin() {
     return (
       <AuthRequired
         title="Войдите как администратор"
-        text="Панель управления открывается только после подтверждения номера телефона администратора."
+        text="Панель управления открывается только для админских аккаунтов после входа по email-коду."
       />
     );
   }
@@ -105,7 +103,7 @@ export default function Admin() {
           <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Нет доступа</p>
           <h1 className="mt-3 font-display text-4xl font-bold">Это клиентский аккаунт</h1>
           <p className="mt-4 leading-7 text-cream/68">
-            Номер {user.phone} не входит в список администраторов. Войдите с админского номера или вернитесь на сайт.
+            Аккаунт {user.email || user.phone} не входит в список администраторов. Войдите с админской почты или добавьте админский телефон в профиле.
           </p>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
@@ -130,15 +128,23 @@ export default function Admin() {
         <div>
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Мини-админка</p>
           <h1 className="mt-3 font-display text-5xl font-bold">Управление рестораном</h1>
-          <p className="mt-3 text-sm text-cream/58">Вход выполнен по номеру {user.phone}</p>
+          <p className="mt-3 text-sm text-cream/58">Вход выполнен как {user.email || user.phone}</p>
         </div>
-        <button
-          type="button"
-          onClick={logout}
-          className="inline-flex items-center justify-center gap-2 rounded-full border border-gold/25 px-5 py-3 font-bold text-gold transition hover:bg-gold hover:text-ink"
-        >
-          <LogOut size={18} /> Выйти
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            to="/admin/orders"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-5 py-3 font-extrabold text-ink transition hover:bg-cream"
+          >
+            <ClipboardList size={18} /> Заказы
+          </Link>
+          <button
+            type="button"
+            onClick={logout}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-gold/25 px-5 py-3 font-bold text-gold transition hover:bg-gold hover:text-ink"
+          >
+            <LogOut size={18} /> Выйти
+          </button>
+        </div>
       </div>
       {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
 
@@ -173,35 +179,20 @@ export default function Admin() {
       </div>
 
       <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">
-        <h2 className="mb-2 text-2xl font-bold">Заказы и статусы</h2>
-        <p className="mb-5 text-sm text-cream/58">Админ или курьер меняет статус, а клиент видит уведомление в профиле.</p>
-        {orders.length ? (
-          <div className="space-y-3">
-            {orders.map((order) => (
-              <div key={order.id} className="grid gap-4 rounded-2xl border border-cream/8 bg-ink/60 p-4 lg:grid-cols-[1fr_260px] lg:items-center">
-                <div>
-                  <p className="font-bold">Заказ #{order.id.slice(0, 6)} · {order.customer?.name || 'Клиент'}</p>
-                  <p className="mt-1 text-sm text-cream/52">{order.customer?.phone} · {order.total} MDL</p>
-                  <p className="mt-2 text-sm text-gold">{(order.statusHistory || [])[0]?.label || 'Заказ обработан'}</p>
-                </div>
-                <select
-                  className={inputClass}
-                  value={order.status || 'processed'}
-                  onChange={(event) => {
-                    updateOrderStatus(order.id, event.target.value);
-                    showNotice('Статус заказа обновлен');
-                  }}
-                >
-                  {ORDER_STATUSES.map((status) => (
-                    <option key={status.value} value={status.value}>{status.label}</option>
-                  ))}
-                </select>
-              </div>
-            ))}
+        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <h2 className="mb-2 text-2xl font-bold">Рабочий экран заказов</h2>
+            <p className="text-sm leading-6 text-cream/58">
+              Все данные клиента, состав заказа, адрес, способ оплаты, комментарий и смена статусов вынесены на отдельную страницу.
+            </p>
           </div>
-        ) : (
-          <div className="rounded-2xl border border-gold/14 bg-ink/60 p-6 text-center text-cream/58">Заказов пока нет.</div>
-        )}
+          <Link
+            to="/admin/orders"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink transition hover:bg-cream"
+          >
+            <ClipboardList size={18} /> Открыть заказы
+          </Link>
+        </div>
       </div>
 
       <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">

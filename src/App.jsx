@@ -11,6 +11,7 @@ import Booking from './pages/Booking.jsx';
 import About from './pages/About.jsx';
 import Contacts from './pages/Contacts.jsx';
 import Admin from './pages/Admin.jsx';
+import AdminOrders from './pages/AdminOrders.jsx';
 import Login from './pages/Login.jsx';
 import Account from './pages/Account.jsx';
 import { useRestaurant } from './context/RestaurantContext.jsx';
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/account" element={<Account />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

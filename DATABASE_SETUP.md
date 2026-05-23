@@ -44,9 +44,11 @@
 
 ```env
 VITE_DB_PROVIDER=supabase
-VITE_AUTH_PROVIDER=demo
+VITE_AUTH_PROVIDER=supabase
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-public-key
+VITE_ADMIN_EMAILS=owner@example.com
+VITE_ADMIN_PHONES=+37361058107
 ```
 
 Запустите проект:
@@ -58,42 +60,44 @@ npm run dev
 
 Если переменные не указаны, сайт автоматически вернется в демо-режим `localStorage`.
 
-## 4. Настроить реальную отправку SMS-кода
+## 4. Настроить вход по email-коду
 
-По умолчанию вход работает в демо-режиме:
+По умолчанию можно оставить демо-вход:
 
 ```env
 VITE_AUTH_PROVIDER=demo
 ```
 
-Чтобы код реально приходил в SMS:
+Чтобы код реально приходил на почту:
 
 1. В Supabase откройте `Authentication`.
 2. Перейдите в `Sign In / Providers`.
-3. Включите `Phone`.
-4. Настройте SMS provider в Supabase.
+3. Включите `Email`.
+4. Убедитесь, что email-шаблон содержит OTP token.
 5. После этого поменяйте переменную:
 
 ```env
 VITE_AUTH_PROVIDER=supabase
 ```
 
-Если SMS provider не настроен, Supabase не сможет доставить OTP-код, и вход будет показывать ошибку.
+После входа клиент добавляет телефон в профиле. Без телефона заказ и бронь не откроются, потому что администратор должен иметь контакт для уточнения.
 
 ## 5. Как данные попадают в БД
 
 - Первый запуск с Supabase автоматически закидывает стартовые настройки ресторана и меню из `src/data.js`, если таблицы пустые.
-- Клиент входит по номеру и имени, профиль сохраняется в `profiles`.
+- Клиент входит по email и имени, профиль сохраняется в `profiles`.
+- Контактный телефон клиента сохраняется в `profiles.phone`.
 - Адреса сохраняются в `user_addresses`.
 - Маски банковских карт сохраняются в `user_cards`.
 - Заказ сохраняется в `orders`, состав заказа в `order_items`.
+- Подробности заказа сохраняются в `orders.customer` и `orders.checkout`.
 - Статусы заказа сохраняются в `order_status_events`.
 - Бонусный баланс сохраняется в `bonus_accounts`.
 - История баллов сохраняется в `bonus_transactions`.
 - Бронь столика сохраняется в `bookings`.
-- Админ меняет статус заказа, клиент видит уведомление в профиле.
+- Админ меняет статус заказа на `/admin/orders`, клиент видит уведомление в профиле.
 
-## 6. Автоудаление готовых заказов
+## 6. Автоудаление старых доставленных заказов
 
 В `database/schema.sql` уже есть функция:
 
@@ -126,11 +130,13 @@ select cron.schedule(
 Добавьте:
 
 - `VITE_DB_PROVIDER` = `supabase`
-- `VITE_AUTH_PROVIDER` = `demo` или `supabase`
+- `VITE_AUTH_PROVIDER` = `supabase`
 - `VITE_SUPABASE_URL` = ваш `Project URL`
 - `VITE_SUPABASE_ANON_KEY` = ваш `anon public key`
+- `VITE_ADMIN_EMAILS` = email владельца или менеджера
+- `VITE_ADMIN_PHONES` = телефоны админов через запятую
 
-После следующего `git push` сайт соберется уже с подключением к Supabase.
+После следующего `git push` сайт соберется уже с подключением к Supabase и email-входом.
 
 ## Важно про безопасность
 

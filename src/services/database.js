@@ -67,7 +67,7 @@ const rowToMenu = (row) => ({
 const profileToRow = (profile) =>
   compact({
     normalized_phone: profile.normalizedPhone,
-    phone: profile.phone,
+    phone: profile.phone || '',
     name: profile.name || '',
     birth_date: profile.birthDate || null,
     gender: profile.gender || null,
@@ -79,6 +79,7 @@ const profileToRow = (profile) =>
 const rowToProfile = (row) => ({
   phone: row.phone,
   normalizedPhone: row.normalized_phone,
+  email: String(row.normalized_phone || '').includes('@') ? row.normalized_phone : '',
   name: row.name || '',
   birthDate: row.birth_date || '',
   gender: row.gender || 'Не важно',

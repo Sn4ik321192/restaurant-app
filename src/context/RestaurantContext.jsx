@@ -13,7 +13,7 @@ import {
   saveRestaurantSettings,
   updateOrderStatus as updateOrderStatusInDatabase,
 } from '../services/database.js';
-import { authMode, isSmsAuthEnabled, sendSmsCode, verifySmsCode } from '../services/auth.js';
+import { authMode, isEmailAuthEnabled, sendEmailCode as sendAuthEmailCode, verifyEmailCode as verifyAuthEmailCode } from '../services/auth.js';
 
 const STORAGE_KEYS = {
   restaurant: 'restaurant-app-data',
@@ -51,8 +51,14 @@ const createId = () => {
 };
 
 export const normalizePhone = (phone = '') => phone.replace(/\D/g, '');
+export const normalizeEmail = (email = '') => email.trim().toLowerCase();
 
-const createDemoCode = () => String(Math.floor(1000 + Math.random() * 9000));
+const normalizeAccountKey = (value = '') => {
+  const text = String(value).trim();
+  return text.includes('@') ? normalizeEmail(text) : normalizePhone(text);
+};
+
+const createDemoCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
 const mergeData = (savedData) => ({
   ...restaurantData,
@@ -108,7 +114,7 @@ export function RestaurantProvider({ children }) {
   });
   const authStatus = {
     mode: authMode,
-    smsEnabled: isSmsAuthEnabled,
+    emailEnabled: isEmailAuthEnabled,
   };
 
   const pushRemote = (operation) => {
@@ -213,34 +219,54 @@ export function RestaurantProvider({ children }) {
     writeStorage(STORAGE_KEYS.bonusTransactions, nextTransactions);
   };
 
-  const isAdminPhone = (phone) => {
-    const normalized = normalizePhone(phone);
-    return (data.admin.phoneNumbers || []).map(normalizePhone).includes(normalized);
+  const getUserKey = (targetUser = user) => targetUser?.accountKey || targetUser?.normalizedPhone || normalizeAccountKey(targetUser?.email || targetUser?.phone || '');
+
+  const isAdminAccount = (targetUser) => {
+    const email = normalizeEmail(targetUser?.email || '');
+    const phone = normalizePhone(targetUser?.phone || targetUser?.normalizedPhone || '');
+    const envAdminEmails = (import.meta.env.VITE_ADMIN_EMAILS || '').split(',').map(normalizeEmail).filter(Boolean);
+    const envAdminPhones = (import.meta.env.VITE_ADMIN_PHONES || '').split(',').map(normalizePhone).filter(Boolean);
+    const adminEmails = [...(data.admin.emails || []).map(normalizeEmail), ...envAdminEmails];
+    const adminPhones = [...(data.admin.phoneNumbers || []).map(normalizePhone), ...envAdminPhones];
+
+    return Boolean((email && adminEmails.includes(email)) || (phone && adminPhones.includes(phone)));
   };
 
-  const getBonusBalance = (phone = user?.normalizedPhone) => {
-    if (!phone) return 0;
-    return Number(bonusAccounts[normalizePhone(phone)] || 0);
+  const getBonusBalance = (accountKey = getUserKey()) => {
+    const key = normalizeAccountKey(accountKey);
+    if (!key) return 0;
+    return Number(bonusAccounts[key] || 0);
   };
 
-  const getProfile = (phone = user?.normalizedPhone) => {
-    if (!phone) return null;
-    return profiles[normalizePhone(phone)] || null;
+  const getProfile = (accountKey = getUserKey()) => {
+    const key = normalizeAccountKey(accountKey);
+    if (!key) return null;
+    return profiles[key] || null;
   };
 
   const updateProfile = (updates) => {
-    if (!user?.normalizedPhone) return;
+    const accountKey = getUserKey();
+    if (!accountKey) return;
 
     const currentProfile = getProfile() || {};
     const nextProfile = {
       ...currentProfile,
       ...updates,
-      phone: user.phone,
-      normalizedPhone: user.normalizedPhone,
+      email: user.email || currentProfile.email || '',
+      phone: updates.phone ?? currentProfile.phone ?? user.phone ?? '',
+      normalizedPhone: accountKey,
       updatedAt: new Date().toISOString(),
     };
-    const nextProfiles = { ...profiles, [user.normalizedPhone]: nextProfile };
-    const nextUser = { ...user, name: nextProfile.name || user.name };
+    nextProfile.role = isAdminAccount({ ...user, email: nextProfile.email, phone: nextProfile.phone }) ? 'admin' : nextProfile.role || 'client';
+    const nextProfiles = { ...profiles, [accountKey]: nextProfile };
+    const nextUser = {
+      ...user,
+      name: nextProfile.name || user.name,
+      phone: nextProfile.phone,
+      normalizedPhone: accountKey,
+      accountKey,
+      role: nextProfile.role,
+    };
 
     persistProfiles(nextProfiles);
     setUser(nextUser);
@@ -249,7 +275,7 @@ export function RestaurantProvider({ children }) {
   };
 
   const addAddress = (address) => {
-    if (!user?.normalizedPhone) return;
+    if (!getUserKey()) return;
     const currentProfile = getProfile() || {};
     const addressWithId = { ...address, id: createId(), createdAt: new Date().toISOString() };
     const addresses = [...(currentProfile.addresses || []), addressWithId];
@@ -271,7 +297,7 @@ export function RestaurantProvider({ children }) {
   const setDefaultAddress = (id) => updateProfile({ defaultAddressId: id });
 
   const addCard = (card) => {
-    if (!user?.normalizedPhone) return;
+    if (!getUserKey()) return;
     const currentProfile = getProfile() || {};
     const digits = normalizePhone(card.number);
     const cardWithId = {
@@ -289,64 +315,66 @@ export function RestaurantProvider({ children }) {
     updateProfile({ cards: (currentProfile.cards || []).filter((card) => card.id !== id) });
   };
 
-  const requestPhoneCode = async (phone, name = '') => {
-    const normalizedPhone = normalizePhone(phone);
+  const requestEmailCode = async (email, name = '') => {
+    const normalizedEmail = normalizeEmail(email);
     const trimmedName = name.trim();
 
-    if (normalizedPhone.length < 7) {
-      return { ok: false, error: 'Введите корректный номер телефона' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return { ok: false, error: 'Введите корректную почту' };
     }
 
     if (trimmedName.length < 2) {
       return { ok: false, error: 'Введите имя' };
     }
 
-    if (isSmsAuthEnabled) {
+    if (isEmailAuthEnabled) {
       try {
-        await sendSmsCode(phone);
-        const login = { phone, normalizedPhone, name: trimmedName, code: null, authMode: 'sms' };
+        await sendAuthEmailCode(normalizedEmail);
+        const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code: null, authMode: 'email' };
         setPendingLogin(login);
-        return { ok: true, sms: true };
+        return { ok: true, email: true };
       } catch (error) {
         return {
           ok: false,
-          error: `Не удалось отправить SMS. Проверьте Phone Auth и SMS provider в Supabase. ${error.message || ''}`,
+          error: `Не удалось отправить код на почту. Проверьте Email provider в Supabase. ${error.message || ''}`,
         };
       }
     }
 
     const code = createDemoCode();
-    const login = { phone, normalizedPhone, name: trimmedName, code, authMode: 'demo' };
+    const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code, authMode: 'demo' };
     setPendingLogin(login);
 
     return { ok: true, code };
   };
 
-  const verifyPhoneCode = async (code) => {
+  const verifyEmailCode = async (code) => {
     if (!pendingLogin) {
       return { ok: false, error: 'Сначала запросите код подтверждения' };
     }
 
-    if (pendingLogin.authMode === 'sms') {
+    if (pendingLogin.authMode === 'email') {
       try {
-        await verifySmsCode(pendingLogin.phone, String(code).trim());
+        await verifyAuthEmailCode(pendingLogin.email, String(code).trim());
       } catch (error) {
         return {
           ok: false,
-          error: `Неверный SMS-код или Supabase отклонил проверку. ${error.message || ''}`,
+          error: `Неверный email-код или Supabase отклонил проверку. ${error.message || ''}`,
         };
       }
     } else if (String(code).trim() !== pendingLogin.code) {
       return { ok: false, error: 'Неверный код подтверждения' };
     }
 
-    const existingProfile = profiles[pendingLogin.normalizedPhone] || {};
-    const role = isAdminPhone(pendingLogin.normalizedPhone) ? 'admin' : 'client';
+    const accountKey = pendingLogin.accountKey;
+    const existingProfile = profiles[accountKey] || {};
+    const role = isAdminAccount({ email: pendingLogin.email, phone: existingProfile.phone }) ? 'admin' : 'client';
     const nextProfile = {
       ...existingProfile,
       name: pendingLogin.name,
-      phone: pendingLogin.phone,
-      normalizedPhone: pendingLogin.normalizedPhone,
+      email: pendingLogin.email,
+      phone: existingProfile.phone || '',
+      normalizedPhone: accountKey,
       role,
       addresses: existingProfile.addresses || [],
       cards: existingProfile.cards || [],
@@ -354,14 +382,16 @@ export function RestaurantProvider({ children }) {
       updatedAt: new Date().toISOString(),
     };
     const nextUser = {
-      phone: pendingLogin.phone,
-      normalizedPhone: pendingLogin.normalizedPhone,
+      email: pendingLogin.email,
+      phone: nextProfile.phone,
+      normalizedPhone: accountKey,
+      accountKey,
       name: nextProfile.name,
       role,
       loggedAt: new Date().toISOString(),
     };
 
-    persistProfiles({ ...profiles, [pendingLogin.normalizedPhone]: nextProfile });
+    persistProfiles({ ...profiles, [accountKey]: nextProfile });
     pushRemote(() => saveProfileToDatabase(nextProfile));
     setUser(nextUser);
     writeStorage(STORAGE_KEYS.authUser, nextUser);
@@ -406,20 +436,22 @@ export function RestaurantProvider({ children }) {
   const clearCart = () => persistCart([]);
 
   const submitOrder = (order) => {
-    const normalizedPhone = user?.normalizedPhone || normalizePhone(order.customer?.phone || '');
+    const accountKey = getUserKey() || normalizeAccountKey(order.customer?.email || order.customer?.phone || '');
     const spentBonuses = Math.max(0, Number(order.checkout?.bonusPoints || 0));
     const earnBase = Math.max(0, Number(order.total || 0));
     const earnedBonuses = Math.floor(earnBase * 0.05);
-    const currentBalance = getBonusBalance(normalizedPhone);
+    const currentBalance = getBonusBalance(accountKey);
     const nextBalance = Math.max(0, currentBalance - spentBonuses) + earnedBonuses;
     const createdAt = new Date().toISOString();
+    const currentProfile = getProfile(accountKey) || {};
     const orderWithBonus = {
       ...order,
-      phone: normalizedPhone,
+      phone: accountKey,
       customer: {
         ...order.customer,
-        name: order.customer?.name || user?.name || getProfile(normalizedPhone)?.name || '',
-        phone: order.customer?.phone || user?.phone || '',
+        name: order.customer?.name || user?.name || currentProfile.name || '',
+        email: order.customer?.email || user?.email || currentProfile.email || accountKey,
+        phone: order.customer?.phone || user?.phone || currentProfile.phone || '',
       },
       status: 'processed',
       statusHistory: [
@@ -442,7 +474,7 @@ export function RestaurantProvider({ children }) {
     if (spentBonuses > 0) {
       newTransactions.push({
         id: createId(),
-        phone: normalizedPhone,
+        phone: accountKey,
         type: 'spent',
         amount: -spentBonuses,
         description: 'Списание за заказ',
@@ -453,7 +485,7 @@ export function RestaurantProvider({ children }) {
     if (earnedBonuses > 0) {
       newTransactions.push({
         id: createId(),
-        phone: normalizedPhone,
+        phone: accountKey,
         type: 'earned',
         amount: earnedBonuses,
         description: 'Начисление за заказ',
@@ -462,7 +494,7 @@ export function RestaurantProvider({ children }) {
     }
 
     persistOrders([orderWithBonus, ...orders]);
-    persistBonusAccounts({ ...bonusAccounts, [normalizedPhone]: nextBalance });
+    persistBonusAccounts({ ...bonusAccounts, [accountKey]: nextBalance });
     persistBonusTransactions([...newTransactions, ...bonusTransactions]);
     pushRemote(() => saveOrderToDatabase(orderWithBonus, newTransactions, nextBalance));
     clearCart();
@@ -490,11 +522,14 @@ export function RestaurantProvider({ children }) {
   };
 
   const submitBooking = (booking) => {
+    const accountKey = getUserKey() || normalizeAccountKey(booking.email || booking.phone || '');
+    const currentProfile = getProfile(accountKey) || {};
     const bookingWithMeta = {
       ...booking,
       name: booking.name || user?.name || '',
-      phone: booking.phone || user?.phone || '',
-      normalizedPhone: user?.normalizedPhone || normalizePhone(booking.phone || ''),
+      email: booking.email || user?.email || currentProfile.email || accountKey,
+      phone: booking.phone || user?.phone || currentProfile.phone || '',
+      normalizedPhone: accountKey,
       id: createId(),
       createdAt: new Date().toISOString(),
     };
@@ -538,12 +573,15 @@ export function RestaurantProvider({ children }) {
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const isAuthenticated = Boolean(user);
-  const isAdmin = Boolean(user && isAdminPhone(user.normalizedPhone));
+  const accountKey = getUserKey();
+  const isAdmin = Boolean(user && isAdminAccount(user));
   const bonusBalance = getBonusBalance();
   const profile = getProfile();
-  const userOrders = user?.normalizedPhone ? orders.filter((order) => order.phone === user.normalizedPhone) : [];
-  const userBonusTransactions = user?.normalizedPhone
-    ? bonusTransactions.filter((transaction) => transaction.phone === user.normalizedPhone)
+  const contactPhone = profile?.phone || user?.phone || '';
+  const hasContactPhone = normalizePhone(contactPhone).length >= 7;
+  const userOrders = accountKey ? orders.filter((order) => order.phone === accountKey) : [];
+  const userBonusTransactions = accountKey
+    ? bonusTransactions.filter((transaction) => transaction.phone === accountKey)
     : [];
   const loyaltySpend = userOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const currentRank = [...LOYALTY_RANKS].reverse().find((rank) => loyaltySpend >= rank.threshold) || LOYALTY_RANKS[0];
@@ -576,6 +614,7 @@ export function RestaurantProvider({ children }) {
       cartTotal,
       cartCount,
       user,
+      accountKey,
       profile,
       profiles,
       orders,
@@ -589,12 +628,14 @@ export function RestaurantProvider({ children }) {
       pendingLogin,
       isAuthenticated,
       isAdmin,
+      hasContactPhone,
+      contactPhone,
       bonusBalance,
       databaseStatus,
       authStatus,
       reloadDatabase,
-      requestPhoneCode,
-      verifyPhoneCode,
+      requestEmailCode,
+      verifyEmailCode,
       logout,
       updateProfile,
       addAddress,
@@ -620,12 +661,15 @@ export function RestaurantProvider({ children }) {
       cartTotal,
       cartCount,
       user,
+      accountKey,
       profiles,
       orders,
       bookings,
       pendingLogin,
       isAuthenticated,
       isAdmin,
+      hasContactPhone,
+      contactPhone,
       bonusBalance,
       databaseStatus,
       bonusAccounts,

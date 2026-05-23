@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { MessageCircle, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { Mail, MessageCircle, Phone, ShieldCheck, UserRound } from 'lucide-react';
 import FormField, { inputClass } from '../components/FormField.jsx';
 import { useRestaurant } from '../context/RestaurantContext.jsx';
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestPhoneCode, verifyPhoneCode } = useRestaurant();
+  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestEmailCode, verifyEmailCode } = useRestaurant();
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [demoCode, setDemoCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const from = location.state?.from || (isAdmin ? '/admin' : '/');
+  const from = location.state?.from || (isAdmin ? '/admin/orders' : '/');
 
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -24,7 +24,7 @@ export default function Login() {
   const sendCode = async (event) => {
     event.preventDefault();
     setLoading(true);
-    const result = await requestPhoneCode(phone, name);
+    const result = await requestEmailCode(email, name);
     setLoading(false);
 
     if (!result.ok) {
@@ -39,7 +39,7 @@ export default function Login() {
   const confirmCode = async (event) => {
     event.preventDefault();
     setLoading(true);
-    const result = await verifyPhoneCode(code);
+    const result = await verifyEmailCode(code);
     setLoading(false);
 
     if (!result.ok) {
@@ -47,7 +47,7 @@ export default function Login() {
       return;
     }
 
-    navigate(result.user.role === 'admin' ? '/admin' : from, { replace: true });
+    navigate(result.user.role === 'admin' ? '/admin/orders' : '/account', { replace: true, state: { from } });
   };
 
   return (
@@ -55,13 +55,14 @@ export default function Login() {
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div className="animated-shell">
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Аккаунт</p>
-          <h1 className="mt-3 font-display text-5xl font-bold">Вход по номеру телефона</h1>
+          <h1 className="mt-3 font-display text-5xl font-bold">Вход по почте</h1>
           <p className="mt-5 text-lg leading-8 text-cream/68">
-            Введите имя и телефон, получите код подтверждения и пользуйтесь заказами, бронью, бонусами и личным профилем.
+            Введите имя и email, получите код подтверждения на почту, а затем добавьте телефон в профиле для уточнения заказов.
           </p>
           <div className="mt-7 grid gap-3 text-sm text-cream/68">
-            <p className="flex items-center gap-3"><Phone className="text-gold" size={18} /> Только номер телефона, без почты и пароля.</p>
-            <p className="flex items-center gap-3"><ShieldCheck className="text-gold" size={18} /> Роль администратора определяется автоматически по номеру.</p>
+            <p className="flex items-center gap-3"><Mail className="text-gold" size={18} /> Вход без пароля: только email и одноразовый код.</p>
+            <p className="flex items-center gap-3"><Phone className="text-gold" size={18} /> Телефон понадобится в профиле, чтобы ресторан мог уточнить заказ.</p>
+            <p className="flex items-center gap-3"><ShieldCheck className="text-gold" size={18} /> Роль администратора определяется по email или админскому телефону в профиле.</p>
           </div>
         </div>
 
@@ -80,19 +81,19 @@ export default function Login() {
                   placeholder="Александр"
                 />
               </FormField>
-              <FormField label="Номер телефона">
+              <FormField label="Email">
                 <input
                   required
                   className={inputClass}
-                  type="tel"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="+373 68 123 456"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="alex@example.com"
                 />
               </FormField>
               {error && <p className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</p>}
               <button disabled={loading} className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60">
-                {loading ? 'Отправляем...' : authStatus.smsEnabled ? 'Получить SMS-код' : 'Получить код'}
+                {loading ? 'Отправляем...' : authStatus.emailEnabled ? 'Получить код на почту' : 'Получить код'}
               </button>
             </form>
           ) : (
@@ -101,11 +102,11 @@ export default function Login() {
                 <MessageCircle size={24} />
               </div>
               <div>
-                <h2 className="text-2xl font-bold">Введите код из SMS</h2>
+                <h2 className="text-2xl font-bold">Введите код из письма</h2>
                 <p className="mt-2 text-sm text-cream/60">
-                  {pendingLogin.authMode === 'sms'
-                    ? `SMS отправлено на ${pendingLogin.phone}`
-                    : `Демо-код создан для ${pendingLogin.phone}`}
+                  {pendingLogin.authMode === 'email'
+                    ? `Код отправлен на ${pendingLogin.email}`
+                    : `Демо-код создан для ${pendingLogin.email}`}
                 </p>
               </div>
               <FormField label="Код подтверждения">
@@ -113,13 +114,13 @@ export default function Login() {
                   required
                   className={`${inputClass} text-center text-2xl font-extrabold tracking-[0.35em]`}
                   inputMode="numeric"
-                  maxLength="4"
+                  maxLength="6"
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="0000"
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
                 />
               </FormField>
-              {pendingLogin.authMode !== 'sms' && (
+              {pendingLogin.authMode !== 'email' && (
                 <div className="rounded-2xl border border-gold/20 bg-gold/10 p-4 text-sm text-gold">
                   Демо-код: <span className="font-extrabold">{demoCode || pendingLogin.code}</span>
                 </div>

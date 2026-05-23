@@ -7,6 +7,7 @@ import {
   CreditCard,
   MapPin,
   Minus,
+  Phone,
   Plus,
   ReceiptText,
   Truck,
@@ -27,7 +28,7 @@ const paymentMethods = [
 ];
 
 export default function Checkout() {
-  const { cart, cartTotal, submitOrder, isAuthenticated, user, profile, bonusBalance } = useRestaurant();
+  const { cart, cartTotal, submitOrder, isAuthenticated, hasContactPhone, user, profile, bonusBalance } = useRestaurant();
   const navigate = useNavigate();
   const [sent, setSent] = useState(false);
   const [deliveryType, setDeliveryType] = useState('delivery');
@@ -39,7 +40,8 @@ export default function Checkout() {
   const [promoCode, setPromoCode] = useState('');
   const [form, setForm] = useState({
     name: profile?.name || user?.name || '',
-    phone: user?.phone || '',
+    email: user?.email || profile?.email || '',
+    phone: profile?.phone || user?.phone || '',
     address: profile?.defaultAddressId
       ? (() => {
           const address = (profile.addresses || []).find((item) => item.id === profile.defaultAddressId);
@@ -98,9 +100,13 @@ export default function Checkout() {
     return (
       <AuthRequired
         title="Войдите, чтобы оформить заказ"
-        text="Заказы доступны только подтвержденным пользователям. Вход занимает один шаг: номер телефона и SMS-код."
+        text="Заказы доступны только после входа по email-коду. Телефон понадобится уже в профиле, чтобы ресторан мог уточнить детали."
       />
     );
+  }
+
+  if (!hasContactPhone) {
+    return <ContactPhoneRequired />;
   }
 
   if (!cart.length && !sent) {
@@ -152,7 +158,8 @@ export default function Checkout() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm text-cream/54">Аккаунт</p>
-                <p className="break-words text-xl font-extrabold">{user?.phone}</p>
+                <p className="break-words text-xl font-extrabold">{user?.email}</p>
+                <p className="mt-1 text-sm text-cream/52">{profile?.phone || user?.phone}</p>
               </div>
             </div>
           </CheckoutCard>
@@ -213,6 +220,7 @@ export default function Checkout() {
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField label="Имя"><input required className={inputClass} name="name" value={form.name} onChange={update} placeholder="Ваше имя" /></FormField>
               <FormField label="Телефон"><input required className={inputClass} name="phone" value={form.phone} onChange={update} placeholder="Телефон" /></FormField>
+              <FormField label="Email"><input required className={inputClass} type="email" name="email" value={form.email} onChange={update} placeholder="Email" /></FormField>
             </div>
           </CheckoutCard>
 
@@ -342,6 +350,26 @@ export default function Checkout() {
           </p>
         </aside>
       </form>
+    </section>
+  );
+}
+
+function ContactPhoneRequired() {
+  return (
+    <section className="section-shell grid min-h-[62vh] place-items-center py-14 text-center md:py-20">
+      <div className="glass animated-shell max-w-lg rounded-[28px] p-8 shadow-glow">
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full border border-gold/25 bg-gold/10 text-gold">
+          <Phone size={28} />
+        </div>
+        <p className="mt-6 text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Нужен телефон</p>
+        <h1 className="mt-3 font-display text-4xl font-bold">Добавьте номер в профиле</h1>
+        <p className="mt-4 leading-7 text-cream/68">
+          Администратор ресторана должен иметь возможность позвонить и уточнить заказ перед приготовлением или доставкой.
+        </p>
+        <Link to="/account" className="shine mt-7 inline-flex rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
+          Открыть профиль
+        </Link>
+      </div>
     </section>
   );
 }
