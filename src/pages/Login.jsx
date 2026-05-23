@@ -114,10 +114,10 @@ export default function Login() {
                   required
                   className={`${inputClass} text-center text-2xl font-extrabold tracking-[0.35em]`}
                   inputMode="numeric"
-                  maxLength="6"
+                  maxLength="8"
                   value={code}
-                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
+                  onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="00000000"
                 />
               </FormField>
               {pendingLogin.authMode !== 'email' && (
