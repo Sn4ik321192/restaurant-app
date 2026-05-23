@@ -16,12 +16,23 @@ async function authRequest(path, body) {
     body: JSON.stringify(body),
   });
   const text = await response.text();
+  let payload = null;
 
-  if (!response.ok) {
-    throw new Error(text || 'Auth request failed');
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = null;
   }
 
-  return text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const error = new Error(payload?.msg || payload?.message || text || 'Auth request failed');
+    error.status = response.status;
+    error.authCode = payload?.error_code || '';
+    error.payload = payload;
+    throw error;
+  }
+
+  return payload;
 }
 
 export async function sendEmailCode(email) {

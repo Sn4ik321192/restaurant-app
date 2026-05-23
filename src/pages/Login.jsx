@@ -7,11 +7,12 @@ import { useRestaurant } from '../context/RestaurantContext.jsx';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestEmailCode, verifyEmailCode } = useRestaurant();
+  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestEmailCode, verifyEmailCode, clearPendingLogin } = useRestaurant();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [demoCode, setDemoCode] = useState('');
+  const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -29,10 +30,12 @@ export default function Login() {
 
     if (!result.ok) {
       setError(result.error);
+      setNotice('');
       return;
     }
 
     setDemoCode(result.code || '');
+    setNotice(result.warning || '');
     setError('');
   };
 
@@ -44,6 +47,7 @@ export default function Login() {
 
     if (!result.ok) {
       setError(result.error);
+      setNotice('');
       return;
     }
 
@@ -109,6 +113,7 @@ export default function Login() {
                     : `Демо-код создан для ${pendingLogin.email}`}
                 </p>
               </div>
+              {notice && <p className="rounded-2xl border border-gold/25 bg-gold/10 p-3 text-sm font-bold text-gold">{notice}</p>}
               <FormField label="Код подтверждения">
                 <input
                   required
@@ -128,6 +133,19 @@ export default function Login() {
               {error && <p className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</p>}
               <button disabled={loading} className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60">
                 {loading ? 'Проверяем...' : 'Войти'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearPendingLogin();
+                  setCode('');
+                  setDemoCode('');
+                  setNotice('');
+                  setError('');
+                }}
+                className="rounded-full border border-gold/25 px-6 py-3 font-bold text-gold hover:bg-gold hover:text-ink"
+              >
+                Изменить email
               </button>
             </form>
           )}

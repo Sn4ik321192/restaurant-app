@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
   orders: 'restaurant-app-orders',
   bookings: 'restaurant-app-bookings',
   authUser: 'restaurant-app-auth-user',
+  pendingLogin: 'restaurant-app-pending-login',
   bonusAccounts: 'restaurant-app-bonus-accounts',
   bonusTransactions: 'restaurant-app-bonus-transactions',
   profiles: 'restaurant-app-profiles',
@@ -104,7 +105,7 @@ export function RestaurantProvider({ children }) {
   const [bookings, setBookings] = useState(() => readStorage(STORAGE_KEYS.bookings, []));
   const [bonusAccounts, setBonusAccounts] = useState(() => readStorage(STORAGE_KEYS.bonusAccounts, {}));
   const [bonusTransactions, setBonusTransactions] = useState(() => readStorage(STORAGE_KEYS.bonusTransactions, []));
-  const [pendingLogin, setPendingLogin] = useState(null);
+  const [pendingLogin, setPendingLogin] = useState(() => readStorage(STORAGE_KEYS.pendingLogin, null));
   const [databaseStatus, setDatabaseStatus] = useState({
     mode: databaseMode,
     enabled: isRemoteDatabaseEnabled,
@@ -219,6 +220,20 @@ export function RestaurantProvider({ children }) {
     writeStorage(STORAGE_KEYS.bonusTransactions, nextTransactions);
   };
 
+  const persistPendingLogin = (login) => {
+    setPendingLogin(login);
+    writeStorage(STORAGE_KEYS.pendingLogin, login);
+  };
+
+  const clearPendingLogin = () => {
+    setPendingLogin(null);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.pendingLogin);
+    } catch {
+      // Ignore storage errors; the in-memory state is already cleared.
+    }
+  };
+
   const getUserKey = (targetUser = user) => targetUser?.accountKey || targetUser?.normalizedPhone || normalizeAccountKey(targetUser?.email || targetUser?.phone || '');
 
   const isAdminAccount = (targetUser) => {
@@ -328,12 +343,29 @@ export function RestaurantProvider({ children }) {
     }
 
     if (isEmailAuthEnabled) {
+      const login = {
+        email: normalizedEmail,
+        accountKey: normalizedEmail,
+        name: trimmedName,
+        code: null,
+        authMode: 'email',
+        requestedAt: new Date().toISOString(),
+      };
+
       try {
         await sendAuthEmailCode(normalizedEmail);
-        const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code: null, authMode: 'email' };
-        setPendingLogin(login);
+        persistPendingLogin(login);
         return { ok: true, email: true };
       } catch (error) {
+        if (error.status === 429 || error.authCode === 'over_email_send_rate_limit') {
+          persistPendingLogin({ ...login, rateLimited: true });
+          return {
+            ok: true,
+            email: true,
+            warning: 'Supabase временно запретил новое письмо. Введите код из последнего письма или подождите и запросите новый код позже.',
+          };
+        }
+
         return {
           ok: false,
           error: `Не удалось отправить код на почту. Проверьте Email provider в Supabase. ${error.message || ''}`,
@@ -342,8 +374,8 @@ export function RestaurantProvider({ children }) {
     }
 
     const code = createDemoCode();
-    const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code, authMode: 'demo' };
-    setPendingLogin(login);
+    const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code, authMode: 'demo', requestedAt: new Date().toISOString() };
+    persistPendingLogin(login);
 
     return { ok: true, code };
   };
@@ -395,14 +427,14 @@ export function RestaurantProvider({ children }) {
     pushRemote(() => saveProfileToDatabase(nextProfile));
     setUser(nextUser);
     writeStorage(STORAGE_KEYS.authUser, nextUser);
-    setPendingLogin(null);
+    clearPendingLogin();
 
     return { ok: true, user: nextUser };
   };
 
   const logout = () => {
     setUser(null);
-    setPendingLogin(null);
+    clearPendingLogin();
     persistCart([]);
     try {
       localStorage.removeItem(STORAGE_KEYS.authUser);
@@ -636,6 +668,7 @@ export function RestaurantProvider({ children }) {
       reloadDatabase,
       requestEmailCode,
       verifyEmailCode,
+      clearPendingLogin,
       logout,
       updateProfile,
       addAddress,
