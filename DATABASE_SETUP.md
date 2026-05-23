@@ -73,8 +73,10 @@ VITE_AUTH_PROVIDER=demo
 1. В Supabase откройте `Authentication`.
 2. Перейдите в `Sign In / Providers`.
 3. Включите `Email`.
-4. Убедитесь, что email-шаблон содержит OTP token.
-5. После этого поменяйте переменную:
+4. В `Authentication` → `URL Configuration` укажите Site URL опубликованного сайта.
+5. В `Authentication` → `Email Templates` вставьте HTML из `database/email-template.html` в шаблоны `Confirm signup` и `Magic Link`.
+6. Убедитесь, что в шаблоне есть `{{ .Token }}`, а ссылки с `{{ .ConfirmationURL }}` удалены, если нужен только код.
+7. После этого поменяйте переменную:
 
 ```env
 VITE_AUTH_PROVIDER=supabase

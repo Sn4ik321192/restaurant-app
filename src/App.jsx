@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link, Route, Routes, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Header from './components/Header.jsx';
 import MobileNav from './components/MobileNav.jsx';
 import Footer from './components/Footer.jsx';
@@ -18,9 +18,12 @@ import { useRestaurant } from './context/RestaurantContext.jsx';
 
 export default function App() {
   const location = useLocation();
-  const { data } = useRestaurant();
+  const navigate = useNavigate();
+  const { completeEmailLinkSignIn, data } = useRestaurant();
   const [showSplash, setShowSplash] = useState(true);
   const [hideSplash, setHideSplash] = useState(false);
+  const [authNotice, setAuthNotice] = useState('');
+  const authCallbackHandled = useRef(false);
 
   useEffect(() => {
     const hideTimer = window.setTimeout(() => setHideSplash(true), 1250);
@@ -36,10 +39,42 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (authCallbackHandled.current) return;
+
+    const rawHash = window.location.hash.replace(/^#\/?/, '');
+    const params = new URLSearchParams(rawHash);
+    const accessToken = params.get('access_token');
+    const authError = params.get('error_description') || params.get('error');
+
+    if (!accessToken && !authError) return;
+
+    authCallbackHandled.current = true;
+
+    const cleanUrl = `${window.location.origin}${window.location.pathname}#/login`;
+    window.history.replaceState(null, '', cleanUrl);
+
+    if (authError) {
+      setAuthNotice(`Supabase отклонил ссылку: ${authError}`);
+      return;
+    }
+
+    completeEmailLinkSignIn(accessToken).then((result) => {
+      if (result.ok) {
+        setAuthNotice('Вход по ссылке подтвержден. Осталось добавить телефон в профиле.');
+        navigate(result.user.role === 'admin' ? '/admin/orders' : '/account', { replace: true });
+        return;
+      }
+
+      setAuthNotice(result.error || 'Не удалось войти по ссылке из письма');
+    });
+  }, [completeEmailLinkSignIn, navigate]);
+
   return (
     <div className="min-h-screen overflow-hidden pb-20 text-cream md:pb-0">
       {showSplash && <SplashScreen exiting={hideSplash} name={data.restaurant.name} />}
       <Header />
+      {authNotice && <AuthNotice message={authNotice} onClose={() => setAuthNotice('')} />}
       <main key={location.pathname} className="page-enter">
         <Routes>
           <Route path="/" element={<Home />} />
@@ -58,6 +93,19 @@ export default function App() {
       </main>
       <Footer />
       <MobileNav />
+    </div>
+  );
+}
+
+function AuthNotice({ message, onClose }) {
+  return (
+    <div className="fixed left-1/2 top-24 z-[90] w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-gold/25 bg-charcoal/96 p-4 text-sm font-bold text-cream shadow-glow backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-4">
+        <p className="leading-6">{message}</p>
+        <button type="button" onClick={onClose} className="shrink-0 rounded-full border border-gold/25 px-3 py-1 text-gold hover:bg-gold hover:text-ink">
+          OK
+        </button>
+      </div>
     </div>
   );
 }

@@ -13,7 +13,13 @@ import {
   saveRestaurantSettings,
   updateOrderStatus as updateOrderStatusInDatabase,
 } from '../services/database.js';
-import { authMode, isEmailAuthEnabled, sendEmailCode as sendAuthEmailCode, verifyEmailCode as verifyAuthEmailCode } from '../services/auth.js';
+import {
+  authMode,
+  getAuthUser,
+  isEmailAuthEnabled,
+  sendEmailCode as sendAuthEmailCode,
+  verifyEmailCode as verifyAuthEmailCode,
+} from '../services/auth.js';
 
 const STORAGE_KEYS = {
   restaurant: 'restaurant-app-data',
@@ -432,6 +438,60 @@ export function RestaurantProvider({ children }) {
     return { ok: true, user: nextUser };
   };
 
+  const completeEmailLinkSignIn = async (accessToken) => {
+    if (!accessToken) {
+      return { ok: false, error: 'Нет токена входа' };
+    }
+
+    try {
+      const authUser = await getAuthUser(accessToken);
+      const email = normalizeEmail(authUser?.email || '');
+
+      if (!email) {
+        return { ok: false, error: 'Supabase не вернул email пользователя' };
+      }
+
+      const accountKey = email;
+      const existingProfile = profiles[accountKey] || {};
+      const fallbackName = email.split('@')[0] || 'Гость';
+      const role = isAdminAccount({ email, phone: existingProfile.phone }) ? 'admin' : 'client';
+      const nextProfile = {
+        ...existingProfile,
+        name: existingProfile.name || pendingLogin?.name || fallbackName,
+        email,
+        phone: existingProfile.phone || '',
+        normalizedPhone: accountKey,
+        role,
+        addresses: existingProfile.addresses || [],
+        cards: existingProfile.cards || [],
+        createdAt: existingProfile.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const nextUser = {
+        email,
+        phone: nextProfile.phone,
+        normalizedPhone: accountKey,
+        accountKey,
+        name: nextProfile.name,
+        role,
+        loggedAt: new Date().toISOString(),
+      };
+
+      persistProfiles({ ...profiles, [accountKey]: nextProfile });
+      pushRemote(() => saveProfileToDatabase(nextProfile));
+      setUser(nextUser);
+      writeStorage(STORAGE_KEYS.authUser, nextUser);
+      clearPendingLogin();
+
+      return { ok: true, user: nextUser };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error.message || 'Не удалось войти по ссылке из письма',
+      };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     clearPendingLogin();
@@ -668,6 +728,7 @@ export function RestaurantProvider({ children }) {
       reloadDatabase,
       requestEmailCode,
       verifyEmailCode,
+      completeEmailLinkSignIn,
       clearPendingLogin,
       logout,
       updateProfile,
