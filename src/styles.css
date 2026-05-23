@@ -59,10 +59,67 @@ select {
   max-width: 100%;
 }
 
+button,
+a[href],
+[role='button'] {
+  touch-action: manipulation;
+  transition:
+    transform 180ms ease,
+    border-color 220ms ease,
+    background 220ms ease,
+    color 220ms ease,
+    box-shadow 260ms ease,
+    filter 220ms ease;
+}
+
+button:not(:disabled):active,
+a[href]:active,
+[role='button']:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+button:focus-visible,
+a[href]:focus-visible,
+[role='button']:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(216, 179, 95, 0.82);
+  outline-offset: 4px;
+}
+
 .glass {
+  position: relative;
+  overflow: hidden;
   border: 1px solid rgba(216, 179, 95, 0.18);
   background: rgba(20, 17, 14, 0.82);
   backdrop-filter: blur(18px);
+}
+
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, transparent 0%, rgba(255, 255, 255, 0.045) 36%, transparent 58%),
+    radial-gradient(120% 72% at 50% -18%, rgba(216, 179, 95, 0.13), transparent 58%);
+  opacity: 0;
+  transform: translateX(-24%);
+  transition:
+    opacity 420ms ease,
+    transform 680ms cubic-bezier(0.18, 0.84, 0.28, 1);
+}
+
+.glass:hover::before {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.glass > * {
+  position: relative;
+  z-index: 1;
 }
 
 .gold-gradient {
@@ -70,7 +127,8 @@ select {
 }
 
 .animated-shell {
-  animation: fadeUp 0.72s ease both;
+  animation: fadeUp 0.82s cubic-bezier(0.18, 0.84, 0.28, 1) both;
+  will-change: transform, opacity;
 }
 
 .stagger-1 {
@@ -87,15 +145,27 @@ select {
 
 .hover-lift {
   transition:
-    transform 280ms ease,
-    border-color 280ms ease,
-    background 280ms ease,
-    box-shadow 280ms ease;
+    transform 360ms cubic-bezier(0.18, 0.84, 0.28, 1),
+    border-color 300ms ease,
+    background 300ms ease,
+    box-shadow 360ms ease,
+    filter 300ms ease;
+  will-change: transform;
 }
 
 .hover-lift:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 22px 70px rgba(216, 179, 95, 0.2);
+  transform: translateY(-8px) scale(1.012);
+  box-shadow: 0 28px 86px rgba(216, 179, 95, 0.22);
+  filter: saturate(1.05);
+}
+
+.hover-lift img {
+  transition: transform 780ms cubic-bezier(0.18, 0.84, 0.28, 1);
+  will-change: transform;
+}
+
+.hover-lift:hover img {
+  transform: scale(1.065);
 }
 
 .shine {
@@ -109,12 +179,17 @@ select {
   inset: -30% auto -30% 0;
   width: 38%;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
-  animation: shimmer 2.8s ease-in-out infinite;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+.shine:hover::after {
+  animation-duration: 1.25s;
 }
 
 .page-enter {
-  animation: pageReveal 0.78s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: pageReveal 0.86s cubic-bezier(0.18, 0.84, 0.28, 1) both;
   transform-origin: top center;
+  will-change: transform, opacity, filter;
 }
 
 .splash-enter {
@@ -131,6 +206,133 @@ select {
 
 .loader-title {
   animation: titleGlow 1.9s ease-in-out infinite;
+}
+
+.motion-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#root > div > main,
+#root > div > footer {
+  position: relative;
+  z-index: 1;
+}
+
+.motion-halo {
+  position: absolute;
+  width: 84vw;
+  height: 18rem;
+  border-radius: 40% 60% 55% 45%;
+  filter: blur(44px);
+  opacity: 0.18;
+  mix-blend-mode: screen;
+  transform: rotate(-18deg);
+}
+
+.motion-halo-1 {
+  top: 8rem;
+  left: -34vw;
+  background: linear-gradient(90deg, transparent, rgba(216, 179, 95, 0.5), transparent);
+  animation: ambientSweepA 19s ease-in-out infinite;
+}
+
+.motion-halo-2 {
+  right: -38vw;
+  bottom: 10rem;
+  background: linear-gradient(90deg, transparent, rgba(243, 231, 208, 0.24), rgba(216, 179, 95, 0.36), transparent);
+  animation: ambientSweepB 22s ease-in-out infinite;
+}
+
+.motion-halo-3 {
+  top: 45%;
+  left: 8vw;
+  width: 60vw;
+  height: 11rem;
+  background: linear-gradient(90deg, transparent, rgba(167, 123, 45, 0.34), transparent);
+  opacity: 0.12;
+  animation: ambientSweepC 25s ease-in-out infinite;
+}
+
+.motion-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.045;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 92px 92px;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 74%, transparent 100%);
+  animation: grainFloat 18s linear infinite;
+}
+
+.route-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.route-fx span {
+  position: absolute;
+  inset-block: -18%;
+  width: 42vw;
+  min-width: 260px;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(216, 179, 95, 0.14) 18%, rgba(243, 231, 208, 0.2) 46%, rgba(20, 17, 14, 0.72) 62%, transparent 100%);
+  opacity: 0;
+  transform: translateX(-145%) skewX(-16deg);
+  filter: blur(0.2px);
+  animation: routeSweep 920ms cubic-bezier(0.18, 0.84, 0.28, 1) forwards;
+}
+
+.route-fx span:nth-child(1) {
+  left: -20vw;
+}
+
+.route-fx span:nth-child(2) {
+  left: 20vw;
+  animation-delay: 70ms;
+}
+
+.route-fx span:nth-child(3) {
+  left: 58vw;
+  animation-delay: 130ms;
+}
+
+.click-burst {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9999;
+  width: 0.85rem;
+  height: 0.85rem;
+  pointer-events: none;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 217, 139, 0.9);
+  box-shadow:
+    0 0 0 0 rgba(216, 179, 95, 0.34),
+    0 0 26px rgba(216, 179, 95, 0.5);
+  transform: translate(-50%, -50%) scale(0.38);
+  animation: clickBurst 680ms ease-out forwards;
+}
+
+.click-burst::before,
+.click-burst::after {
+  content: '';
+  position: absolute;
+  inset: -0.55rem;
+  border-radius: inherit;
+  border: 1px solid rgba(216, 179, 95, 0.42);
+}
+
+.click-burst::after {
+  inset: -1.05rem;
+  border-color: rgba(243, 231, 208, 0.28);
 }
 
 .checkout-input {
@@ -198,19 +400,107 @@ select {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+
+  .motion-atmosphere,
+  .route-fx,
+  .click-burst {
+    display: none !important;
+  }
 }
 
 @keyframes pageReveal {
   0% {
     opacity: 0;
-    transform: translateY(34px) scale(0.985);
-    filter: blur(12px);
+    transform: translateY(38px) scale(0.982);
+    filter: blur(14px);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.002);
+    filter: blur(0);
   }
 
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
     filter: blur(0);
+  }
+}
+
+@keyframes ambientSweepA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-18deg) scaleX(1);
+  }
+
+  50% {
+    transform: translate3d(28vw, 7vh, 0) rotate(-10deg) scaleX(1.16);
+  }
+}
+
+@keyframes ambientSweepB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(16deg) scaleX(1);
+  }
+
+  50% {
+    transform: translate3d(-24vw, -6vh, 0) rotate(8deg) scaleX(1.2);
+  }
+}
+
+@keyframes ambientSweepC {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-8deg);
+  }
+
+  50% {
+    transform: translate3d(14vw, 10vh, 0) rotate(-18deg);
+  }
+}
+
+@keyframes grainFloat {
+  from {
+    background-position: 0 0, 0 0;
+  }
+
+  to {
+    background-position: 92px 92px, -92px 92px;
+  }
+}
+
+@keyframes routeSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-145%) skewX(-16deg);
+  }
+
+  14%,
+  62% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(255%) skewX(-16deg);
+  }
+}
+
+@keyframes clickBurst {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.34);
+  }
+
+  72% {
+    opacity: 0.7;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(3.6);
   }
 }
 
