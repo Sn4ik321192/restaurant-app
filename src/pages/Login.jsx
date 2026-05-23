@@ -7,7 +7,8 @@ import { useRestaurant } from '../context/RestaurantContext.jsx';
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, isAdmin, pendingLogin, authStatus, requestEmailCode, verifyEmailCode, clearPendingLogin } = useRestaurant();
+  const { isAuthenticated, isAdmin, pendingLogin, requestEmailCode, verifyEmailCode, clearPendingLogin } = useRestaurant();
+  const [mode, setMode] = useState('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -25,7 +26,7 @@ export default function Login() {
   const sendCode = async (event) => {
     event.preventDefault();
     setLoading(true);
-    const result = await requestEmailCode(email, name);
+    const result = await requestEmailCode(email, mode === 'register' ? name : '', mode);
     setLoading(false);
 
     if (!result.ok) {
@@ -59,9 +60,9 @@ export default function Login() {
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div className="animated-shell">
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Аккаунт</p>
-          <h1 className="mt-3 font-display text-5xl font-bold">Вход по почте</h1>
+          <h1 className="mt-3 font-display text-5xl font-bold">Вход и регистрация</h1>
           <p className="mt-5 text-lg leading-8 text-cream/68">
-            Введите имя и email, получите код подтверждения на почту, а затем добавьте телефон в профиле для уточнения заказов.
+            Войдите по email, если аккаунт уже есть. Для нового аккаунта укажите имя один раз, а телефон добавьте в профиле для уточнения заказов.
           </p>
           <div className="mt-7 grid gap-3 text-sm text-cream/68">
             <p className="flex items-center gap-3"><Mail className="text-gold" size={18} /> Вход без пароля: только email и одноразовый код.</p>
@@ -74,17 +75,40 @@ export default function Login() {
           {!pendingLogin ? (
             <form onSubmit={sendCode} className="grid gap-5">
               <div className="grid h-14 w-14 place-items-center rounded-full border border-gold/25 bg-gold/10 text-gold">
-                <UserRound size={24} />
+                {mode === 'login' ? <Mail size={24} /> : <UserRound size={24} />}
               </div>
-              <FormField label="Имя">
-                <input
-                  required
-                  className={inputClass}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Александр"
-                />
-              </FormField>
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border border-gold/14 bg-ink/70 p-1">
+                {[
+                  { value: 'login', label: 'Войти' },
+                  { value: 'register', label: 'Зарегистрироваться' },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => {
+                      setMode(item.value);
+                      setError('');
+                      setNotice('');
+                    }}
+                    className={`min-h-12 rounded-xl px-3 text-sm font-black transition ${
+                      mode === item.value ? 'bg-gold text-ink shadow-glow' : 'text-cream/58 hover:bg-cream/8 hover:text-cream'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              {mode === 'register' && (
+                <FormField label="Имя">
+                  <input
+                    required
+                    className={inputClass}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Александр"
+                  />
+                </FormField>
+              )}
               <FormField label="Email">
                 <input
                   required
@@ -97,7 +121,7 @@ export default function Login() {
               </FormField>
               {error && <p className="rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">{error}</p>}
               <button disabled={loading} className="shine rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60">
-                {loading ? 'Отправляем...' : authStatus.emailEnabled ? 'Получить код на почту' : 'Получить код'}
+                {loading ? 'Отправляем...' : mode === 'login' ? 'Получить код для входа' : 'Создать аккаунт'}
               </button>
             </form>
           ) : (
@@ -111,6 +135,9 @@ export default function Login() {
                   {pendingLogin.authMode === 'email'
                     ? `Код отправлен на ${pendingLogin.email}`
                     : `Демо-код создан для ${pendingLogin.email}`}
+                </p>
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-gold">
+                  {pendingLogin.flow === 'register' ? 'Регистрация' : 'Вход'}
                 </p>
               </div>
               {notice && <p className="rounded-2xl border border-gold/25 bg-gold/10 p-3 text-sm font-bold text-gold">{notice}</p>}

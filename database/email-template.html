@@ -1,36 +1,58 @@
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0;padding:0;background:#080706;">
-  <tr>
-    <td align="center" style="padding:36px 16px;font-family:Arial,Helvetica,sans-serif;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#14110e;border:1px solid #d8b35f55;border-radius:28px;overflow:hidden;">
-        <tr>
-          <td style="padding:34px 28px;text-align:center;">
-            <div style="display:inline-block;width:58px;height:58px;border-radius:50%;border:1px solid #d8b35f66;background:#d8b35f18;line-height:58px;color:#d8b35f;font-size:26px;">
-              ✦
-            </div>
-            <h1 style="margin:22px 0 0;color:#f7ead1;font-size:32px;line-height:1.1;font-weight:800;">
-              Restaurant App
-            </h1>
-            <p style="margin:8px 0 0;color:#d8b35f;font-size:11px;font-weight:700;letter-spacing:5px;text-transform:uppercase;">
-              Premium dining
-            </p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:0 28px 34px;text-align:center;">
-            <div style="background:#080706;border:1px solid #d8b35f33;border-radius:24px;padding:26px 18px;">
-              <p style="margin:0;color:#f7ead1cc;font-size:17px;line-height:1.5;">
-                Ваш код для входа
-              </p>
-              <div style="margin:22px 0;color:#d8b35f;font-size:42px;line-height:1.1;font-weight:900;letter-spacing:8px;">
-                {{ .Token }}
-              </div>
-              <p style="margin:0;color:#f7ead188;font-size:13px;line-height:1.6;">
-                Введите этот код на сайте. Если вы не входили в аккаунт, просто игнорируйте письмо.
-              </p>
-            </div>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="color-scheme" content="dark only">
+    <meta name="supported-color-schemes" content="dark">
+  </head>
+  <body bgcolor="#080706" style="margin:0;padding:0;background-color:#080706 !important;color:#f7ead1;color-scheme:dark only;supported-color-schemes:dark;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#080706;">
+      Ваш код для входа в Restaurant App: {{ .Token }}
+    </div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#080706" style="width:100%;margin:0;padding:0;background-color:#080706 !important;">
+      <tr>
+        <td align="center" bgcolor="#080706" style="padding:36px 14px;background-color:#080706 !important;font-family:Arial,Helvetica,sans-serif;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#14110e" style="width:100%;max-width:520px;background-color:#14110e !important;border:1px solid #8f7738;border-radius:28px;">
+            <tr>
+              <td align="center" bgcolor="#14110e" style="padding:34px 26px 20px;background-color:#14110e !important;text-align:center;border-radius:28px 28px 0 0;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                  <tr>
+                    <td align="center" bgcolor="#211b11" style="width:58px;height:58px;border-radius:58px;background-color:#211b11 !important;border:1px solid #8f7738;color:#d8b35f;font-size:26px;line-height:58px;">
+                      ✦
+                    </td>
+                  </tr>
+                </table>
+                <h1 style="margin:22px 0 0;color:#f7ead1 !important;font-size:34px;line-height:1.1;font-weight:800;font-family:Arial,Helvetica,sans-serif;">
+                  Restaurant App
+                </h1>
+                <p style="margin:10px 0 0;color:#d8b35f !important;font-size:11px;font-weight:700;letter-spacing:5px;text-transform:uppercase;">
+                  Premium dining
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td bgcolor="#14110e" style="padding:0 26px 34px;background-color:#14110e !important;border-radius:0 0 28px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#080706" style="width:100%;background-color:#080706 !important;border:1px solid #5f4f28;border-radius:24px;">
+                  <tr>
+                    <td align="center" bgcolor="#080706" style="padding:28px 18px;background-color:#080706 !important;text-align:center;border-radius:24px;">
+                      <p style="margin:0;color:#f7ead1 !important;font-size:17px;line-height:1.5;font-family:Arial,Helvetica,sans-serif;">
+                        Ваш код для входа
+                      </p>
+                      <div style="margin:22px 0;color:#d8b35f !important;font-size:42px;line-height:1.1;font-weight:900;letter-spacing:8px;font-family:Arial,Helvetica,sans-serif;">
+                        {{ .Token }}
+                      </div>
+                      <p style="margin:0;color:#cfc2aa !important;font-size:13px;line-height:1.6;font-family:Arial,Helvetica,sans-serif;">
+                        Введите этот код на сайте. Если вы не входили в аккаунт, просто игнорируйте письмо.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -40,7 +40,7 @@ async function authRequest(path, body) {
   return payload;
 }
 
-export async function sendEmailCode(email) {
+export async function sendEmailCode(email, shouldCreateUser = true) {
   if (!isEmailAuthEnabled) {
     return null;
   }
@@ -50,7 +50,7 @@ export async function sendEmailCode(email) {
 
   return authRequest(path, {
     email,
-    create_user: true,
+    create_user: shouldCreateUser,
   });
 }
 

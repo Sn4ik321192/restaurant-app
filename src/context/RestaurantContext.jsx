@@ -336,30 +336,37 @@ export function RestaurantProvider({ children }) {
     updateProfile({ cards: (currentProfile.cards || []).filter((card) => card.id !== id) });
   };
 
-  const requestEmailCode = async (email, name = '') => {
+  const requestEmailCode = async (email, name = '', flow = 'login') => {
     const normalizedEmail = normalizeEmail(email);
     const trimmedName = name.trim();
+    const isRegisterFlow = flow === 'register';
+    const existingProfile = profiles[normalizedEmail] || null;
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return { ok: false, error: 'Введите корректную почту' };
     }
 
-    if (trimmedName.length < 2) {
+    if (isRegisterFlow && trimmedName.length < 2) {
       return { ok: false, error: 'Введите имя' };
+    }
+
+    if (isRegisterFlow && existingProfile?.name) {
+      return { ok: false, error: 'Аккаунт с этой почтой уже есть. Нажмите "Войти".' };
     }
 
     if (isEmailAuthEnabled) {
       const login = {
         email: normalizedEmail,
         accountKey: normalizedEmail,
-        name: trimmedName,
+        name: isRegisterFlow ? trimmedName : '',
+        flow,
         code: null,
         authMode: 'email',
         requestedAt: new Date().toISOString(),
       };
 
       try {
-        await sendAuthEmailCode(normalizedEmail);
+        await sendAuthEmailCode(normalizedEmail, isRegisterFlow);
         persistPendingLogin(login);
         return { ok: true, email: true };
       } catch (error) {
@@ -374,13 +381,23 @@ export function RestaurantProvider({ children }) {
 
         return {
           ok: false,
-          error: `Не удалось отправить код на почту. Проверьте Email provider в Supabase. ${error.message || ''}`,
+          error: isRegisterFlow
+            ? `Не удалось отправить код на почту. Проверьте Email provider в Supabase. ${error.message || ''}`
+            : `Аккаунт с этой почтой не найден или Supabase отклонил вход. Нажмите "Зарегистрироваться", если это новый аккаунт. ${error.message || ''}`,
         };
       }
     }
 
     const code = createDemoCode();
-    const login = { email: normalizedEmail, accountKey: normalizedEmail, name: trimmedName, code, authMode: 'demo', requestedAt: new Date().toISOString() };
+    const login = {
+      email: normalizedEmail,
+      accountKey: normalizedEmail,
+      name: isRegisterFlow ? trimmedName : '',
+      flow,
+      code,
+      authMode: 'demo',
+      requestedAt: new Date().toISOString(),
+    };
     persistPendingLogin(login);
 
     return { ok: true, code };
@@ -406,10 +423,11 @@ export function RestaurantProvider({ children }) {
 
     const accountKey = pendingLogin.accountKey;
     const existingProfile = profiles[accountKey] || {};
+    const fallbackName = pendingLogin.email.split('@')[0] || 'Гость';
     const role = isAdminAccount({ email: pendingLogin.email, phone: existingProfile.phone }) ? 'admin' : 'client';
     const nextProfile = {
       ...existingProfile,
-      name: pendingLogin.name,
+      name: existingProfile.name || pendingLogin.name || fallbackName,
       email: pendingLogin.email,
       phone: existingProfile.phone || '',
       normalizedPhone: accountKey,
