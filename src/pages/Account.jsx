@@ -184,6 +184,11 @@ export default function Account() {
                 <History size={19} /> Заказы
               </Link>
             )}
+            {isAdmin && (
+              <Link to="/admin/payments" className="flex items-center gap-3 rounded-2xl px-4 py-3 font-bold text-gold hover:bg-cream/8">
+                <CreditCard size={19} /> Оплата
+              </Link>
+            )}
           </div>
         </aside>
 

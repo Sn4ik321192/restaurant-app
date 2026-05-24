@@ -3,6 +3,21 @@ export const restaurantData = {
     phoneNumbers: ['+37377432554', '+37361058107'],
     emails: ['admin@restaurant.app'],
   },
+  payment: {
+    currency: 'MDL',
+    provider: 'demo',
+    environment: 'test',
+    demoMode: true,
+    deliveryFee: 20,
+    minOrderAmount: 0,
+    enabledMethods: {
+      cash: true,
+      card: true,
+      online: true,
+    },
+    providerPublicName: 'Demo Pay',
+    webhookPath: '/functions/v1/payment-webhook',
+  },
   restaurant: {
     name: 'Restaurant App',
     logo: '',

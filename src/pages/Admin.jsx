@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ClipboardList, Database, LogOut, Plus, RefreshCw, Save, ShieldAlert, Trash2 } from 'lucide-react';
+import { ClipboardList, CreditCard, Database, LogOut, Plus, RefreshCw, Save, ShieldAlert, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AuthRequired from '../components/AuthRequired.jsx';
 import FormField, { inputClass } from '../components/FormField.jsx';
@@ -137,6 +137,12 @@ export default function Admin() {
           >
             <ClipboardList size={18} /> Заказы
           </Link>
+          <Link
+            to="/admin/payments"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-gold/25 px-5 py-3 font-bold text-gold transition hover:bg-gold hover:text-ink"
+          >
+            <CreditCard size={18} /> Оплата
+          </Link>
           <button
             type="button"
             onClick={logout}
@@ -191,6 +197,23 @@ export default function Admin() {
             className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink transition hover:bg-cream"
           >
             <ClipboardList size={18} /> Открыть заказы
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-10 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:p-6">
+        <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
+          <div>
+            <h2 className="mb-2 text-2xl font-bold">Оплата и провайдеры</h2>
+            <p className="text-sm leading-6 text-cream/58">
+              Валюта, доставка, минимальная сумма заказа, Demo Pay и будущие подключения maib, Paynet, Flitt или Stripe вынесены в отдельный модуль.
+            </p>
+          </div>
+          <Link
+            to="/admin/payments"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink transition hover:bg-cream"
+          >
+            <CreditCard size={18} /> Настроить оплату
           </Link>
         </div>
       </div>

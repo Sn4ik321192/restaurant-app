@@ -12,6 +12,7 @@ import {
   saveProfile as saveProfileToDatabase,
   saveRestaurantSettings,
   updateOrderStatus as updateOrderStatusInDatabase,
+  updatePaymentStatus as updatePaymentStatusInDatabase,
 } from '../services/database.js';
 import {
   authMode,
@@ -20,6 +21,7 @@ import {
   sendEmailCode as sendAuthEmailCode,
   verifyEmailCode as verifyAuthEmailCode,
 } from '../services/auth.js';
+import { createPaymentSnapshot, getPaymentStatus, normalizePaymentSettings } from '../services/payments.js';
 
 const STORAGE_KEYS = {
   restaurant: 'restaurant-app-data',
@@ -78,6 +80,10 @@ const mergeData = (savedData) => ({
     ...restaurantData.restaurant,
     ...(savedData?.restaurant || {}),
   },
+  payment: normalizePaymentSettings({
+    ...restaurantData.payment,
+    ...(savedData?.payment || {}),
+  }),
   categories: Array.isArray(savedData?.categories) ? savedData.categories : restaurantData.categories,
   menuItems: Array.isArray(savedData?.menuItems) ? savedData.menuItems : restaurantData.menuItems,
   benefits: Array.isArray(savedData?.benefits) ? savedData.benefits : restaurantData.benefits,
@@ -554,6 +560,15 @@ export function RestaurantProvider({ children }) {
     const nextBalance = Math.max(0, currentBalance - spentBonuses) + earnedBonuses;
     const createdAt = new Date().toISOString();
     const currentProfile = getProfile(accountKey) || {};
+    const orderId = createId();
+    const payment = createPaymentSnapshot({
+      id: createId(),
+      orderId,
+      method: order.checkout?.paymentMethod || 'cash',
+      amount: order.total,
+      settings: data.payment,
+      createdAt,
+    });
     const orderWithBonus = {
       ...order,
       phone: accountKey,
@@ -576,7 +591,8 @@ export function RestaurantProvider({ children }) {
         earned: earnedBonuses,
         balanceAfter: nextBalance,
       },
-      id: createId(),
+      payment,
+      id: orderId,
       createdAt,
     };
     const newTransactions = [];
@@ -608,6 +624,7 @@ export function RestaurantProvider({ children }) {
     persistBonusTransactions([...newTransactions, ...bonusTransactions]);
     pushRemote(() => saveOrderToDatabase(orderWithBonus, newTransactions, nextBalance));
     clearCart();
+    return orderWithBonus;
   };
 
   const updateOrderStatus = (orderId, status) => {
@@ -631,6 +648,51 @@ export function RestaurantProvider({ children }) {
     pushRemote(() => updateOrderStatusInDatabase(orderId, status, statusEvent));
   };
 
+  const updatePaymentStatus = (orderId, status) => {
+    const statusInfo = getPaymentStatus(status);
+    const changedAt = new Date().toISOString();
+    const nextOrders = orders.map((order) => {
+      if (order.id !== orderId) return order;
+
+      const currentPayment = order.payment || {};
+      const nextPayment = {
+        ...currentPayment,
+        orderId,
+        status,
+        statusLabel: statusInfo.label,
+        updatedAt: changedAt,
+        paidAt: status === 'paid' ? currentPayment.paidAt || changedAt : currentPayment.paidAt || null,
+        refundedAt: status === 'refunded' || status === 'partially_refunded' ? changedAt : currentPayment.refundedAt || null,
+        canceledAt: status === 'canceled' ? changedAt : currentPayment.canceledAt || null,
+        events: [
+          {
+            id: createId(),
+            type: 'manual_payment_status',
+            status,
+            label: statusInfo.label,
+            createdAt: changedAt,
+          },
+          ...(currentPayment.events || []),
+        ],
+      };
+
+      return {
+        ...order,
+        payment: nextPayment,
+        checkout: {
+          ...(order.checkout || {}),
+          paymentStatus: status,
+        },
+      };
+    });
+    const updatedOrder = nextOrders.find((order) => order.id === orderId);
+
+    persistOrders(nextOrders);
+    if (updatedOrder?.payment) {
+      pushRemote(() => updatePaymentStatusInDatabase(orderId, updatedOrder.payment));
+    }
+  };
+
   const submitBooking = (booking) => {
     const accountKey = getUserKey() || normalizeAccountKey(booking.email || booking.phone || '');
     const currentProfile = getProfile(accountKey) || {};
@@ -649,6 +711,10 @@ export function RestaurantProvider({ children }) {
 
   const updateRestaurant = (updates) => {
     persistData({ ...data, restaurant: { ...data.restaurant, ...updates } });
+  };
+
+  const updatePaymentSettings = (updates) => {
+    persistData({ ...data, payment: normalizePaymentSettings({ ...data.payment, ...updates }) });
   };
 
   const addDish = (dish) => {
@@ -761,8 +827,10 @@ export function RestaurantProvider({ children }) {
       clearCart,
       submitOrder,
       updateOrderStatus,
+      updatePaymentStatus,
       submitBooking,
       updateRestaurant,
+      updatePaymentSettings,
       addDish,
       deleteDish,
       updateDishPrice,

@@ -42,6 +42,18 @@ async function request(table, { method = 'GET', query = 'select=*', body, prefer
   return text ? JSON.parse(text) : null;
 }
 
+async function optionalRequest(table, options) {
+  try {
+    return await request(table, options);
+  } catch (error) {
+    const message = error.message || '';
+    if (message.includes('42P01') || message.includes('Could not find the table')) {
+      return [];
+    }
+    throw error;
+  }
+}
+
 const menuToRow = (item) =>
   compact({
     id: String(item.id),
@@ -155,8 +167,76 @@ const rowToOrder = (row, items, events) => ({
   bonus: row.bonus || {},
   items,
   statusHistory: events,
+  payment: null,
   createdAt: row.created_at,
   deliveredAt: row.delivered_at,
+});
+
+const paymentToRow = (payment, orderId = payment.orderId) => ({
+  id: payment.id,
+  order_id: orderId,
+  provider: payment.provider || 'demo',
+  provider_label: payment.providerLabel || '',
+  method: payment.method || 'cash',
+  method_label: payment.methodLabel || '',
+  status: payment.status || 'pending',
+  status_label: payment.statusLabel || '',
+  amount: Number(payment.amount || 0),
+  currency: payment.currency || 'MDL',
+  external_payment_id: payment.externalPaymentId || '',
+  external_session_id: payment.externalSessionId || '',
+  checkout_url: payment.checkoutUrl || '',
+  failure_reason: payment.failureReason || '',
+  demo: Boolean(payment.demo),
+  created_at: payment.createdAt || now(),
+  updated_at: payment.updatedAt || now(),
+  paid_at: payment.paidAt || null,
+  canceled_at: payment.canceledAt || null,
+  refunded_at: payment.refundedAt || null,
+});
+
+const rowToPayment = (row, events = []) => ({
+  id: row.id,
+  orderId: row.order_id,
+  provider: row.provider || 'demo',
+  providerLabel: row.provider_label || '',
+  method: row.method || 'cash',
+  methodLabel: row.method_label || '',
+  status: row.status || 'pending',
+  statusLabel: row.status_label || '',
+  amount: Number(row.amount || 0),
+  currency: row.currency || 'MDL',
+  externalPaymentId: row.external_payment_id || '',
+  externalSessionId: row.external_session_id || '',
+  checkoutUrl: row.checkout_url || '',
+  failureReason: row.failure_reason || '',
+  demo: Boolean(row.demo),
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  paidAt: row.paid_at,
+  canceledAt: row.canceled_at,
+  refundedAt: row.refunded_at,
+  events,
+});
+
+const paymentEventToRow = (event, paymentId, orderId) => ({
+  id: event.id || `${paymentId}-${event.status}-${Date.parse(event.createdAt) || Date.now()}`,
+  payment_id: paymentId,
+  order_id: orderId,
+  event_type: event.type || 'payment_event',
+  status: event.status || '',
+  label: event.label || '',
+  payload: event.payload || {},
+  created_at: event.createdAt || now(),
+});
+
+const rowToPaymentEvent = (row) => ({
+  id: row.id,
+  type: row.event_type,
+  status: row.status,
+  label: row.label,
+  payload: row.payload || {},
+  createdAt: row.created_at,
 });
 
 const orderItemToRow = (item, orderId) => ({
@@ -249,6 +329,8 @@ export async function fetchDatabaseState() {
     orderRows,
     orderItemRows,
     statusRows,
+    paymentRows,
+    paymentEventRows,
     bonusAccountRows,
     bonusTransactionRows,
     bookingRows,
@@ -261,6 +343,8 @@ export async function fetchDatabaseState() {
     request('orders', { query: 'select=*&order=created_at.desc' }),
     request('order_items', { query: 'select=*&order=id.asc' }),
     request('order_status_events', { query: 'select=*&order=created_at.desc' }),
+    optionalRequest('payments', { query: 'select=*&order=created_at.desc' }),
+    optionalRequest('payment_events', { query: 'select=*&order=created_at.desc' }),
     request('bonus_accounts', { query: 'select=*' }),
     request('bonus_transactions', { query: 'select=*&order=created_at.desc' }),
     request('bookings', { query: 'select=*&order=created_at.desc' }),
@@ -294,6 +378,16 @@ export async function fetchDatabaseState() {
     eventsByOrder[row.order_id] = [...(eventsByOrder[row.order_id] || []), rowToStatusEvent(row)];
   });
 
+  const paymentEventsByPayment = {};
+  (paymentEventRows || []).forEach((row) => {
+    paymentEventsByPayment[row.payment_id] = [...(paymentEventsByPayment[row.payment_id] || []), rowToPaymentEvent(row)];
+  });
+
+  const paymentsByOrder = {};
+  (paymentRows || []).forEach((row) => {
+    paymentsByOrder[row.order_id] = rowToPayment(row, paymentEventsByPayment[row.id] || []);
+  });
+
   const settings = settingsRows?.[0];
   const data = settings
     ? {
@@ -303,6 +397,7 @@ export async function fetchDatabaseState() {
         benefits: settings.benefits || undefined,
         testimonials: settings.testimonials || undefined,
         openingHours: settings.opening_hours || undefined,
+        payment: settings.payment || undefined,
         menuItems: (menuRows || []).map(rowToMenu),
       }
     : {
@@ -312,7 +407,10 @@ export async function fetchDatabaseState() {
   return {
     data,
     profiles,
-    orders: (orderRows || []).map((row) => rowToOrder(row, itemsByOrder[row.id] || [], eventsByOrder[row.id] || [])),
+    orders: (orderRows || []).map((row) => ({
+      ...rowToOrder(row, itemsByOrder[row.id] || [], eventsByOrder[row.id] || []),
+      payment: paymentsByOrder[row.id] || null,
+    })),
     bonusAccounts: Object.fromEntries((bonusAccountRows || []).map((row) => [row.normalized_phone, Number(row.balance || 0)])),
     bonusTransactions: (bonusTransactionRows || []).map((row) => ({
       id: row.id,
@@ -340,6 +438,7 @@ export async function saveRestaurantSettings(data) {
       benefits: data.benefits,
       testimonials: data.testimonials,
       opening_hours: data.openingHours,
+      payment: data.payment,
       updated_at: now(),
     },
     prefer: 'resolution=merge-duplicates,return=minimal',
@@ -432,6 +531,23 @@ export async function saveOrder(order, bonusTransactions = [], bonusBalance = 0)
     });
   }
 
+  if (order.payment?.id) {
+    await request('payments', {
+      method: 'POST',
+      query: 'on_conflict=id',
+      body: paymentToRow(order.payment, order.id),
+      prefer: 'resolution=merge-duplicates,return=minimal',
+    });
+
+    if (order.payment.events?.length) {
+      await request('payment_events', {
+        method: 'POST',
+        body: order.payment.events.map((event) => paymentEventToRow(event, order.payment.id, order.id)),
+        prefer: 'return=minimal',
+      });
+    }
+  }
+
   await request('bonus_accounts', {
     method: 'POST',
     query: 'on_conflict=normalized_phone',
@@ -478,6 +594,26 @@ export async function updateOrderStatus(orderId, status, event) {
     body: statusEventToRow(event, orderId),
     prefer: 'return=minimal',
   });
+}
+
+export async function updatePaymentStatus(orderId, payment) {
+  if (!isRemoteDatabaseEnabled || !payment?.id) return;
+
+  await request('payments', {
+    method: 'POST',
+    query: 'on_conflict=id',
+    body: paymentToRow(payment, orderId),
+    prefer: 'resolution=merge-duplicates,return=minimal',
+  });
+
+  const event = payment.events?.[0];
+  if (event) {
+    await request('payment_events', {
+      method: 'POST',
+      body: paymentEventToRow(event, payment.id, orderId),
+      prefer: 'return=minimal',
+    });
+  }
 }
 
 export async function saveBooking(booking) {

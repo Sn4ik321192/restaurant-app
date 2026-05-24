@@ -7,6 +7,7 @@ import {
   LogOut,
   MapPin,
   Phone,
+  CreditCard,
   ReceiptText,
   RefreshCw,
   ShieldAlert,
@@ -15,6 +16,7 @@ import {
 import AuthRequired from '../components/AuthRequired.jsx';
 import { inputClass } from '../components/FormField.jsx';
 import { ORDER_STATUSES, useRestaurant } from '../context/RestaurantContext.jsx';
+import { PAYMENT_STATUSES, getPaymentStatus } from '../services/payments.js';
 
 const deliveryLabels = {
   delivery: 'Доставка',
@@ -39,7 +41,7 @@ const statusFilters = [
 ];
 
 export default function AdminOrders() {
-  const { orders, databaseStatus, isAuthenticated, isAdmin, user, logout, reloadDatabase, updateOrderStatus } = useRestaurant();
+  const { orders, databaseStatus, isAuthenticated, isAdmin, user, logout, reloadDatabase, updateOrderStatus, updatePaymentStatus } = useRestaurant();
   const [notice, setNotice] = useState('');
   const [filter, setFilter] = useState('active');
 
@@ -123,9 +125,10 @@ export default function AdminOrders() {
 
       {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <div className="mt-8 grid gap-4 md:grid-cols-4">
         <StatCard icon={ClipboardList} label="Всего заказов" value={orders.length} />
         <StatCard icon={CalendarClock} label="Активные" value={orders.filter((order) => order.status !== 'delivered').length} />
+        <StatCard icon={CreditCard} label="Оплачено" value={orders.filter((order) => order.payment?.status === 'paid').length} />
         <StatCard icon={Database} label="Источник" value={databaseStatus.enabled ? 'Supabase' : 'Demo'} />
       </div>
 
@@ -154,6 +157,10 @@ export default function AdminOrders() {
                 updateOrderStatus(order.id, status);
                 showNotice('Статус заказа обновлен');
               }}
+              onPaymentStatusChange={(status) => {
+                updatePaymentStatus(order.id, status);
+                showNotice('Статус оплаты обновлен');
+              }}
             />
           ))
         ) : (
@@ -166,13 +173,23 @@ export default function AdminOrders() {
   );
 }
 
-function OrderCard({ order, onStatusChange }) {
+function OrderCard({ order, onStatusChange, onPaymentStatusChange }) {
   const customer = order.customer || {};
   const checkout = order.checkout || {};
   const latestStatus = (order.statusHistory || [])[0]?.label || 'Заказ обработан';
   const deliveryType = deliveryLabels[checkout.deliveryType] || checkout.deliveryType || 'Доставка';
   const paymentMethod = paymentLabels[checkout.paymentMethod] || checkout.paymentMethod || 'Не указан';
   const timeMode = timeLabels[checkout.timeMode] || checkout.timeMode || 'Как можно скорее';
+  const payment = order.payment || {
+    method: checkout.paymentMethod || 'cash',
+    methodLabel: paymentMethod,
+    providerLabel: checkout.paymentProvider || paymentMethod,
+    status: checkout.paymentStatus || 'pending',
+    amount: order.total || 0,
+    currency: checkout.currency || 'MDL',
+    events: [],
+  };
+  const paymentStatus = getPaymentStatus(payment.status);
 
   return (
     <article className="glass animated-shell rounded-[28px] p-5 md:p-6">
@@ -184,8 +201,13 @@ function OrderCard({ order, onStatusChange }) {
               <h2 className="mt-2 break-words text-2xl font-black text-cream md:text-3xl">{customer.name || 'Клиент'}</h2>
               <p className="mt-2 text-sm text-cream/48">{formatDate(order.createdAt)}</p>
             </div>
-            <div className="rounded-2xl border border-gold/16 bg-gold/10 px-4 py-3 text-sm font-extrabold text-gold">
-              {latestStatus}
+            <div className="flex flex-wrap gap-2">
+              <div className="rounded-2xl border border-gold/16 bg-gold/10 px-4 py-3 text-sm font-extrabold text-gold">
+                {latestStatus}
+              </div>
+              <div className={`rounded-2xl border px-4 py-3 text-sm font-extrabold ${paymentStatus.tone === 'green' ? 'border-emerald-300/20 bg-emerald-500/10 text-emerald-100' : paymentStatus.tone === 'red' ? 'border-red-300/20 bg-red-500/10 text-red-100' : 'border-gold/16 bg-gold/10 text-gold'}`}>
+                {paymentStatus.label}
+              </div>
             </div>
           </div>
 
@@ -193,7 +215,7 @@ function OrderCard({ order, onStatusChange }) {
             <InfoRow icon={Phone} label="Телефон" value={customer.phone || 'Не указан'} />
             <InfoRow icon={UserRound} label="Email" value={customer.email || 'Не указан'} />
             <InfoRow icon={MapPin} label="Получение" value={deliveryType} />
-            <InfoRow icon={ReceiptText} label="Оплата" value={paymentMethod} />
+            <InfoRow icon={ReceiptText} label="Оплата" value={`${paymentMethod} · ${paymentStatus.label}`} />
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -212,6 +234,15 @@ function OrderCard({ order, onStatusChange }) {
               {customer.changeFrom && <DetailLine label="Сдача с" value={`${customer.changeFrom} MDL`} />}
               <DetailLine label="Бонусы списано" value={`${order.bonus?.spent || checkout.bonusPoints || 0}`} />
               <DetailLine label="Бонусы начислено" value={`+${order.bonus?.earned || 0}`} />
+            </DetailBox>
+
+            <DetailBox title="Платеж">
+              <DetailLine label="Статус" value={paymentStatus.label} />
+              <DetailLine label="Провайдер" value={payment.providerLabel || payment.provider || paymentMethod} />
+              <DetailLine label="Сумма" value={`${payment.amount || order.total || 0} ${payment.currency || checkout.currency || 'MDL'}`} strong />
+              {payment.externalPaymentId && <DetailLine label="Payment ID" value={payment.externalPaymentId} />}
+              {payment.externalSessionId && <DetailLine label="Session ID" value={payment.externalSessionId} />}
+              {payment.paidAt && <DetailLine label="Оплачено" value={formatDate(payment.paidAt)} />}
             </DetailBox>
           </div>
 
@@ -239,6 +270,13 @@ function OrderCard({ order, onStatusChange }) {
             ))}
           </select>
 
+          <label className="mt-5 block text-sm font-extrabold text-cream">Статус оплаты</label>
+          <select className={`${inputClass} mt-3`} value={payment.status || 'pending'} onChange={(event) => onPaymentStatusChange(event.target.value)}>
+            {PAYMENT_STATUSES.map((status) => (
+              <option key={status.value} value={status.value}>{status.label}</option>
+            ))}
+          </select>
+
           <div className="mt-6">
             <p className="font-extrabold text-cream">История статусов</p>
             <div className="mt-4 space-y-3">
@@ -250,6 +288,19 @@ function OrderCard({ order, onStatusChange }) {
               ))}
             </div>
           </div>
+          {(payment.events || []).length > 0 && (
+            <div className="mt-6">
+              <p className="font-extrabold text-cream">История оплаты</p>
+              <div className="mt-4 space-y-3">
+                {(payment.events || []).map((event) => (
+                  <div key={event.id || `${event.status}-${event.createdAt}`} className="rounded-2xl border border-cream/8 bg-ink/55 p-3">
+                    <p className="text-sm font-bold text-gold">{event.label || event.status}</p>
+                    <p className="mt-1 text-xs text-cream/42">{formatDate(event.createdAt)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </article>

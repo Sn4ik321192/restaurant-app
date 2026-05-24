@@ -17,18 +17,18 @@ import {
 import AuthRequired from '../components/AuthRequired.jsx';
 import FormField, { inputClass } from '../components/FormField.jsx';
 import { useRestaurant } from '../context/RestaurantContext.jsx';
+import { getEnabledPaymentMethods, getPaymentProvider, normalizePaymentSettings } from '../services/payments.js';
 
-const deliveryFee = 20;
 const guestOptions = [1, 2, 3, 4, 5, 6];
 
-const paymentMethods = [
-  { id: 'cash', label: 'Наличными', detail: 'при получении', icon: WalletCards },
-  { id: 'online', label: 'Онлайн', detail: 'сейчас', icon: CreditCard },
-  { id: 'card', label: 'Картой', detail: 'при получении', icon: Banknote },
-];
+const paymentIcons = {
+  cash: WalletCards,
+  online: CreditCard,
+  card: Banknote,
+};
 
 export default function Checkout() {
-  const { cart, cartTotal, submitOrder, isAuthenticated, hasContactPhone, user, profile, bonusBalance } = useRestaurant();
+  const { data, cart, cartTotal, submitOrder, isAuthenticated, hasContactPhone, user, profile, bonusBalance } = useRestaurant();
   const navigate = useNavigate();
   const [sent, setSent] = useState(false);
   const [deliveryType, setDeliveryType] = useState('delivery');
@@ -38,6 +38,7 @@ export default function Checkout() {
   const [bonusPoints, setBonusPoints] = useState(0);
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
+  const [paymentNotice, setPaymentNotice] = useState('');
   const [form, setForm] = useState({
     name: profile?.name || user?.name || '',
     email: user?.email || profile?.email || '',
@@ -62,11 +63,18 @@ export default function Checkout() {
 
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value });
 
-  const finalDeliveryFee = deliveryType === 'delivery' ? deliveryFee : 0;
+  const paymentSettings = normalizePaymentSettings(data.payment);
+  const enabledPaymentMethods = getEnabledPaymentMethods(paymentSettings);
+  const selectedProvider = getPaymentProvider(paymentSettings.provider);
+  const finalDeliveryFee = deliveryType === 'delivery' ? Number(paymentSettings.deliveryFee || 0) : 0;
   const maxBonusSpend = Math.min(bonusBalance, Math.floor((cartTotal + finalDeliveryFee) * 0.3));
   const appliedBonusPoints = Math.min(bonusPoints, maxBonusSpend);
   const payableTotal = Math.max(0, cartTotal + finalDeliveryFee - appliedBonusPoints);
   const earnedAfterOrder = Math.floor(payableTotal * 0.05);
+  const minOrderAmount = Number(paymentSettings.minOrderAmount || 0);
+  const belowMinOrder = minOrderAmount > 0 && cartTotal < minOrderAmount;
+  const onlineProviderReady = paymentSettings.provider === 'demo' || paymentSettings.demoMode;
+  const submitDisabled = belowMinOrder || (paymentMethod === 'online' && !onlineProviderReady);
   const greetingName = form.name.trim() || 'гость';
   const orderLines = useMemo(() => cart.map((item) => `${item.quantity} x ${item.name}`).join(', '), [cart]);
 
@@ -76,9 +84,24 @@ export default function Checkout() {
     }
   }, [bonusPoints, maxBonusSpend]);
 
+  useEffect(() => {
+    if (!enabledPaymentMethods.some((method) => method.id === paymentMethod)) {
+      setPaymentMethod(enabledPaymentMethods[0]?.id || 'cash');
+    }
+  }, [enabledPaymentMethods, paymentMethod]);
+
   const onSubmit = (event) => {
     event.preventDefault();
-    submitOrder({
+    if (submitDisabled) {
+      setPaymentNotice(
+        belowMinOrder
+          ? `Минимальная сумма заказа ${minOrderAmount} ${paymentSettings.currency}.`
+          : 'Онлайн-оплата выбранным провайдером требует серверной интеграции. Включите Demo Pay или выберите оплату при получении.',
+      );
+      return;
+    }
+
+    const createdOrder = submitOrder({
       customer: form,
       items: cart,
       total: payableTotal,
@@ -86,6 +109,9 @@ export default function Checkout() {
         deliveryType,
         timeMode,
         paymentMethod,
+        paymentProvider: paymentMethod === 'online' ? paymentSettings.provider : paymentMethod,
+        paymentStatus: paymentMethod === 'online' && onlineProviderReady ? 'paid' : undefined,
+        currency: paymentSettings.currency,
         guestCount,
         bonusPoints: appliedBonusPoints,
         promoCode,
@@ -93,7 +119,7 @@ export default function Checkout() {
       },
     });
     setSent(true);
-    window.setTimeout(() => navigate('/'), 1500);
+    window.setTimeout(() => navigate(createdOrder?.payment?.status === 'paid' ? '/account' : '/'), 1500);
   };
 
   if (!isAuthenticated) {
@@ -226,22 +252,33 @@ export default function Checkout() {
 
           <CheckoutCard title="Тип оплаты">
             <div className="grid gap-3 sm:grid-cols-3">
-              {paymentMethods.map(({ id, label, detail, icon: Icon }) => (
-                <button
-                  type="button"
-                  key={id}
-                  onClick={() => setPaymentMethod(id)}
-                  className={`min-h-32 rounded-2xl border p-4 text-left transition ${
-                    paymentMethod === id
-                      ? 'border-gold bg-gold text-ink shadow-glow'
-                      : 'border-gold/14 bg-ink/60 text-cream/68 hover:border-gold/45 hover:text-cream'
-                  }`}
-                >
-                  <Icon size={30} />
-                  <span className="mt-4 block font-extrabold">{label}</span>
-                  <span className="mt-1 block text-sm opacity-70">{detail}</span>
-                </button>
-              ))}
+              {enabledPaymentMethods.map(({ id, label, detail, adminLabel }) => {
+                const Icon = paymentIcons[id] || CreditCard;
+                const isOnlineBlocked = id === 'online' && !onlineProviderReady;
+
+                return (
+                  <button
+                    type="button"
+                    key={id}
+                    onClick={() => {
+                      setPaymentMethod(id);
+                      setPaymentNotice(isOnlineBlocked ? 'Этот провайдер показан для будущей интеграции. Для демо-оплаты включите Demo Pay в админке.' : '');
+                    }}
+                    className={`min-h-32 rounded-2xl border p-4 text-left transition ${
+                      paymentMethod === id
+                        ? isOnlineBlocked
+                          ? 'border-red-300/35 bg-red-500/10 text-red-100'
+                          : 'border-gold bg-gold text-ink shadow-glow'
+                        : 'border-gold/14 bg-ink/60 text-cream/68 hover:border-gold/45 hover:text-cream'
+                    }`}
+                  >
+                    <Icon size={30} />
+                    <span className="mt-4 block font-extrabold">{label}</span>
+                    <span className="mt-1 block text-sm opacity-70">{detail}</span>
+                    <span className="mt-3 block text-xs font-bold opacity-70">{id === 'online' ? selectedProvider.label : adminLabel}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {paymentMethod === 'cash' && (
@@ -250,6 +287,12 @@ export default function Checkout() {
                 <input className={inputClass} inputMode="numeric" name="changeFrom" value={form.changeFrom} onChange={update} placeholder="Ввести сумму" />
               </div>
             )}
+            {paymentMethod === 'online' && onlineProviderReady && (
+              <div className="mt-5 rounded-2xl border border-gold/18 bg-gold/10 p-4 text-sm leading-6 text-cream/72">
+                <span className="font-extrabold text-gold">Demo Pay:</span> заказ будет отмечен как оплаченный без реального списания денег. Реальный maib/Paynet/Flitt/Stripe подключается через backend-webhook.
+              </div>
+            )}
+            {paymentNotice && <div className="mt-5 rounded-2xl border border-red-300/20 bg-red-500/10 p-4 text-sm font-bold text-red-100">{paymentNotice}</div>}
           </CheckoutCard>
 
           <CheckoutCard title="Количество персон">
@@ -325,24 +368,29 @@ export default function Checkout() {
             {cart.map((item) => (
               <div key={item.id} className="flex justify-between gap-4 text-sm">
                 <span className="text-cream/66">{item.quantity} x {item.name}</span>
-                <span className="font-bold text-cream">{item.price * item.quantity} MDL</span>
+                <span className="font-bold text-cream">{item.price * item.quantity} {paymentSettings.currency}</span>
               </div>
             ))}
           </div>
 
           <div className="my-6 border-t border-gold/12" />
           <SummaryLine label="Состав заказа" value={orderLines || 'Блюда'} muted />
-          <SummaryLine label="Сумма заказа" value={`${cartTotal} MDL`} />
-          <SummaryLine label={deliveryType === 'delivery' ? 'Доставка' : 'Самовывоз'} value={`${finalDeliveryFee} MDL`} />
-          {appliedBonusPoints > 0 && <SummaryLine label="Баллы" value={`-${appliedBonusPoints} MDL`} />}
+          <SummaryLine label="Сумма заказа" value={`${cartTotal} ${paymentSettings.currency}`} />
+          <SummaryLine label={deliveryType === 'delivery' ? 'Доставка' : 'Самовывоз'} value={`${finalDeliveryFee} ${paymentSettings.currency}`} />
+          {appliedBonusPoints > 0 && <SummaryLine label="Баллы" value={`-${appliedBonusPoints} ${paymentSettings.currency}`} />}
           <SummaryLine label="Начислится бонусов" value={`+${earnedAfterOrder}`} />
+          <SummaryLine
+            label="Оплата"
+            value={paymentMethod === 'online' ? selectedProvider.label : enabledPaymentMethods.find((method) => method.id === paymentMethod)?.adminLabel || 'При получении'}
+          />
 
           <div className="mt-7 flex items-end justify-between gap-4">
             <p className="text-2xl font-black">К оплате</p>
-            <p className="text-4xl font-black text-gold">{payableTotal}<span className="text-lg"> MDL</span></p>
+            <p className="text-4xl font-black text-gold">{payableTotal}<span className="text-lg"> {paymentSettings.currency}</span></p>
           </div>
+          {belowMinOrder && <p className="mt-4 rounded-2xl border border-red-300/20 bg-red-500/10 p-3 text-sm font-bold text-red-100">Минимальная сумма заказа {minOrderAmount} {paymentSettings.currency}.</p>}
 
-          <button className="shine mt-6 w-full rounded-full bg-gold px-6 py-4 text-lg font-black text-ink transition hover:bg-cream active:scale-[0.98]">
+          <button disabled={submitDisabled} className="shine mt-6 w-full rounded-full bg-gold px-6 py-4 text-lg font-black text-ink transition hover:bg-cream active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55">
             Заказ подтверждаю
           </button>
           <p className="mt-4 text-center text-xs leading-5 text-cream/38">

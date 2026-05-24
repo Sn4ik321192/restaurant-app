@@ -23,6 +23,8 @@
 - `orders`
 - `order_items`
 - `order_status_events`
+- `payments`
+- `payment_events`
 - `bonus_accounts`
 - `bonus_transactions`
 - `bookings`
@@ -94,10 +96,20 @@ VITE_AUTH_PROVIDER=supabase
 - Заказ сохраняется в `orders`, состав заказа в `order_items`.
 - Подробности заказа сохраняются в `orders.customer` и `orders.checkout`.
 - Статусы заказа сохраняются в `order_status_events`.
+- Платеж по заказу сохраняется в `payments`.
+- История изменений платежа сохраняется в `payment_events`.
 - Бонусный баланс сохраняется в `bonus_accounts`.
 - История баллов сохраняется в `bonus_transactions`.
 - Бронь столика сохраняется в `bookings`.
 - Админ меняет статус заказа на `/admin/orders`, клиент видит уведомление в профиле.
+
+## Оплата
+
+В админке есть страница `/admin/payments`. Там ресторан выбирает валюту, стоимость доставки, минимальную сумму заказа, способы оплаты и provider онлайн-оплаты.
+
+На старте работает `Demo Pay`: он нужен для демонстрации шаблона покупателям и не списывает реальные деньги. Для настоящей онлайн-оплаты нужно подключить backend/Supabase Edge Function и webhook выбранного провайдера (`maib`, `Paynet`, `Flitt`, `Stripe` или `custom`).
+
+В базе не должны храниться полные номера карт, CVC или платежные секреты. В таблице `payments` хранится только техническая информация платежа: provider, method, status, amount, currency, external ids и даты.
 
 ## 6. Автоудаление старых доставленных заказов
 

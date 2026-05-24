@@ -8,8 +8,11 @@ create table if not exists restaurant_settings (
   benefits jsonb not null default '[]'::jsonb,
   testimonials jsonb not null default '[]'::jsonb,
   opening_hours jsonb not null default '[]'::jsonb,
+  payment jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table restaurant_settings add column if not exists payment jsonb not null default '{}'::jsonb;
 
 create table if not exists menu_items (
   id text primary key,
@@ -95,6 +98,47 @@ create table if not exists order_status_events (
 
 create index if not exists order_status_events_order_idx on order_status_events(order_id, created_at desc);
 
+create table if not exists payments (
+  id text primary key,
+  order_id text not null references orders(id) on delete cascade,
+  provider text not null default 'demo',
+  provider_label text not null default '',
+  method text not null default 'cash',
+  method_label text not null default '',
+  status text not null default 'pending',
+  status_label text not null default '',
+  amount numeric(10, 2) not null default 0,
+  currency text not null default 'MDL',
+  external_payment_id text not null default '',
+  external_session_id text not null default '',
+  checkout_url text not null default '',
+  failure_reason text not null default '',
+  demo boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  paid_at timestamptz,
+  canceled_at timestamptz,
+  refunded_at timestamptz
+);
+
+create index if not exists payments_order_idx on payments(order_id);
+create index if not exists payments_status_idx on payments(status);
+create index if not exists payments_provider_idx on payments(provider);
+
+create table if not exists payment_events (
+  id text primary key,
+  payment_id text not null references payments(id) on delete cascade,
+  order_id text not null references orders(id) on delete cascade,
+  event_type text not null default 'payment_event',
+  status text not null default '',
+  label text not null default '',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists payment_events_payment_idx on payment_events(payment_id, created_at desc);
+create index if not exists payment_events_order_idx on payment_events(order_id, created_at desc);
+
 create table if not exists bonus_accounts (
   normalized_phone text primary key,
   balance integer not null default 0,
@@ -156,6 +200,11 @@ create trigger set_orders_updated_at
 before update on orders
 for each row execute function set_updated_at();
 
+drop trigger if exists set_payments_updated_at on payments;
+create trigger set_payments_updated_at
+before update on payments
+for each row execute function set_updated_at();
+
 create or replace function cleanup_completed_orders(retention_days integer default 30)
 returns integer
 language plpgsql
@@ -183,6 +232,8 @@ alter table user_cards enable row level security;
 alter table orders enable row level security;
 alter table order_items enable row level security;
 alter table order_status_events enable row level security;
+alter table payments enable row level security;
+alter table payment_events enable row level security;
 alter table bonus_accounts enable row level security;
 alter table bonus_transactions enable row level security;
 alter table bookings enable row level security;
@@ -226,6 +277,16 @@ drop policy if exists "demo_read_order_status_events" on order_status_events;
 create policy "demo_read_order_status_events" on order_status_events for select using (true);
 drop policy if exists "demo_write_order_status_events" on order_status_events;
 create policy "demo_write_order_status_events" on order_status_events for all using (true) with check (true);
+
+drop policy if exists "demo_read_payments" on payments;
+create policy "demo_read_payments" on payments for select using (true);
+drop policy if exists "demo_write_payments" on payments;
+create policy "demo_write_payments" on payments for all using (true) with check (true);
+
+drop policy if exists "demo_read_payment_events" on payment_events;
+create policy "demo_read_payment_events" on payment_events for select using (true);
+drop policy if exists "demo_write_payment_events" on payment_events;
+create policy "demo_write_payment_events" on payment_events for all using (true) with check (true);
 
 drop policy if exists "demo_read_bonus_accounts" on bonus_accounts;
 create policy "demo_read_bonus_accounts" on bonus_accounts for select using (true);
