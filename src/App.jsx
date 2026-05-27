@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Gift, X } from 'lucide-react';
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Header from './components/Header.jsx';
 import MobileNav from './components/MobileNav.jsx';
@@ -20,10 +21,11 @@ import { useRestaurant } from './context/RestaurantContext.jsx';
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { completeEmailLinkSignIn, data } = useRestaurant();
+  const { completeEmailLinkSignIn, data, birthdayGreeting, accountKey } = useRestaurant();
   const [showSplash, setShowSplash] = useState(true);
   const [hideSplash, setHideSplash] = useState(false);
   const [authNotice, setAuthNotice] = useState('');
+  const [showBirthdayGreeting, setShowBirthdayGreeting] = useState(false);
   const authCallbackHandled = useRef(false);
 
   useEffect(() => {
@@ -71,12 +73,42 @@ export default function App() {
     });
   }, [completeEmailLinkSignIn, navigate]);
 
+  useEffect(() => {
+    if (!birthdayGreeting || !accountKey) {
+      setShowBirthdayGreeting(false);
+      return;
+    }
+
+    const storageKey = `restaurant-app-birthday-greeting-${accountKey}-${birthdayGreeting.year}`;
+
+    try {
+      setShowBirthdayGreeting(localStorage.getItem(storageKey) !== 'seen');
+    } catch {
+      setShowBirthdayGreeting(true);
+    }
+  }, [accountKey, birthdayGreeting?.id, birthdayGreeting?.year]);
+
+  const closeBirthdayGreeting = () => {
+    if (birthdayGreeting && accountKey) {
+      try {
+        localStorage.setItem(`restaurant-app-birthday-greeting-${accountKey}-${birthdayGreeting.year}`, 'seen');
+      } catch {
+        // If storage is blocked, closing the modal for this session is enough.
+      }
+    }
+
+    setShowBirthdayGreeting(false);
+  };
+
   return (
     <div className="min-h-screen overflow-hidden pb-20 text-cream md:pb-0">
       <AmbientMotion />
       {showSplash && <SplashScreen exiting={hideSplash} name={data.restaurant.name} />}
       <Header />
       {authNotice && <AuthNotice message={authNotice} onClose={() => setAuthNotice('')} />}
+      {showBirthdayGreeting && birthdayGreeting && (
+        <BirthdayGreetingModal greeting={birthdayGreeting} restaurantName={data.restaurant.name} onClose={closeBirthdayGreeting} />
+      )}
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -96,6 +128,56 @@ export default function App() {
       </main>
       <Footer />
       <MobileNav />
+    </div>
+  );
+}
+
+function BirthdayGreetingModal({ greeting, restaurantName, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-ink/78 px-4 py-6 backdrop-blur-md">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-[30px] border border-gold/24 bg-charcoal p-6 shadow-glow md:p-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(216,179,95,0.22),transparent_28rem)]" />
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full border border-gold/18 text-cream/58 hover:bg-gold hover:text-ink"
+          aria-label="Закрыть поздравление"
+        >
+          <X size={18} />
+        </button>
+
+        <div className="relative">
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-gold/28 bg-gold/12 text-gold shadow-glow">
+            <Gift size={34} />
+          </div>
+          <p className="mt-6 text-center text-xs font-extrabold uppercase tracking-[0.3em] text-gold">{restaurantName}</p>
+          <h2 className="mt-3 text-center font-display text-4xl font-bold leading-tight text-cream md:text-5xl">{greeting.title}</h2>
+          <p className="mx-auto mt-5 max-w-md text-center leading-7 text-cream/68">{greeting.text}</p>
+
+          <div className="mt-7 rounded-3xl border border-gold/16 bg-ink/60 p-5 text-center">
+            <p className="text-sm font-bold uppercase tracking-[0.22em] text-gold">Подарок дня</p>
+            <p className="mt-3 text-2xl font-black text-cream">Персональное поздравление в профиле</p>
+            <p className="mt-2 text-sm leading-6 text-cream/52">Поздравление также появится в разделе уведомлений и останется частью клиентского профиля на этот день.</p>
+          </div>
+
+          <div className="mt-7 grid gap-3 sm:grid-cols-2">
+            <Link
+              to="/account"
+              onClick={onClose}
+              className="shine inline-flex items-center justify-center rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream"
+            >
+              Открыть профиль
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-gold/25 px-6 py-4 font-bold text-gold hover:bg-gold hover:text-ink"
+            >
+              Спасибо
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

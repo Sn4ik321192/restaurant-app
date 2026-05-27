@@ -29,6 +29,11 @@ const sections = [
 ];
 
 const formatDate = (date) => new Date(date).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const notificationTypeLabels = {
+  birthday: 'Подарок',
+  promo: 'Promo',
+  order: 'Order',
+};
 
 export default function Account() {
   const {
@@ -41,6 +46,7 @@ export default function Account() {
     bonusBalance,
     userOrders,
     notifications,
+    birthdayGreeting,
     loyaltySpend,
     currentRank,
     nextRank,
@@ -140,6 +146,29 @@ export default function Account() {
       </div>
 
       {notice && <div className="mb-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
+      {birthdayGreeting && (
+        <div className="mb-6 overflow-hidden rounded-[28px] border border-gold/24 bg-gold/10 p-5 shadow-glow">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gold text-ink">
+                <Gift size={26} />
+              </div>
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-[0.25em] text-gold">Сегодня праздник</p>
+                <h2 className="mt-2 text-2xl font-black text-cream">{birthdayGreeting.title}</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-cream/66">{birthdayGreeting.text}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveSection('notifications')}
+              className="w-full rounded-full border border-gold/25 px-5 py-3 font-bold text-gold hover:bg-gold hover:text-ink sm:w-fit"
+            >
+              В уведомления
+            </button>
+          </div>
+        </div>
+      )}
       {!hasContactPhone && (
         <div className="mb-6 rounded-[24px] border border-red-300/20 bg-red-500/10 p-5">
           <p className="text-lg font-extrabold text-red-100">Добавьте номер телефона</p>
@@ -203,7 +232,7 @@ export default function Account() {
                         <p className="font-extrabold text-cream">{item.title}</p>
                         <p className="mt-1 text-sm leading-6 text-cream/60">{item.text}</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-gold/10 px-3 py-1 text-xs font-bold text-gold">{item.type === 'promo' ? 'Promo' : 'Order'}</span>
+                      <span className="shrink-0 rounded-full bg-gold/10 px-3 py-1 text-xs font-bold text-gold">{notificationTypeLabels[item.type] || 'Info'}</span>
                     </div>
                     {item.createdAt && <p className="mt-3 text-xs text-cream/35">{formatDate(item.createdAt)}</p>}
                   </div>

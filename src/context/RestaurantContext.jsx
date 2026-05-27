@@ -51,6 +51,31 @@ export const LOYALTY_RANKS = [
 
 const RestaurantContext = createContext(null);
 
+export const isBirthdayToday = (birthDate, referenceDate = new Date()) => {
+  const [year, month, day] = String(birthDate || '').split('T')[0].split('-').map(Number);
+
+  if (!year || !month || !day) return false;
+
+  return referenceDate.getMonth() + 1 === month && referenceDate.getDate() === day;
+};
+
+const createBirthdayGreeting = (profile, user) => {
+  if (!user || !isBirthdayToday(profile?.birthDate)) return null;
+
+  const name = profile?.name || user?.name || 'гость';
+  const year = new Date().getFullYear();
+
+  return {
+    id: `birthday-${year}`,
+    title: `С днем рождения, ${name}!`,
+    text: 'Желаем теплого дня, вкусного настроения и приятных моментов. Ваш ресторан приготовил для вас персональное поздравление.',
+    type: 'birthday',
+    createdAt: new Date().toISOString(),
+    year,
+    name,
+  };
+};
+
 const createId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -756,6 +781,7 @@ export function RestaurantProvider({ children }) {
   const isAdmin = Boolean(user && isAdminAccount(user));
   const bonusBalance = getBonusBalance();
   const profile = getProfile();
+  const birthdayGreeting = createBirthdayGreeting(profile, user);
   const contactPhone = profile?.phone || user?.phone || '';
   const hasContactPhone = normalizePhone(contactPhone).length >= 7;
   const userOrders = accountKey ? orders.filter((order) => order.phone === accountKey) : [];
@@ -767,6 +793,7 @@ export function RestaurantProvider({ children }) {
   const nextRank = LOYALTY_RANKS.find((rank) => rank.threshold > loyaltySpend) || null;
   const notifications = user
     ? [
+        ...(birthdayGreeting ? [birthdayGreeting] : []),
         {
           id: 'promo-welcome',
           title: 'Новинки и промокоды',
@@ -800,6 +827,7 @@ export function RestaurantProvider({ children }) {
       bookings,
       userOrders,
       notifications,
+      birthdayGreeting,
       loyaltySpend,
       currentRank,
       nextRank,
