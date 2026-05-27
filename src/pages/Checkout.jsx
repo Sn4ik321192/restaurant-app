@@ -163,7 +163,7 @@ export default function Checkout() {
   }
 
   return (
-    <section className="section-shell overflow-hidden py-10 md:py-16">
+    <section className="section-shell overflow-hidden pb-16 pt-10 md:py-16">
       <div className="mb-8 flex min-w-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-extrabold uppercase tracking-[0.3em] text-gold">Checkout</p>
@@ -175,7 +175,7 @@ export default function Checkout() {
         </Link>
       </div>
 
-      <form onSubmit={onSubmit} className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
+      <form onSubmit={onSubmit} className="grid min-w-0 gap-6 pb-8 md:pb-0 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-start">
         <div className="min-w-0 space-y-6">
           <CheckoutCard>
             <div className="flex items-center gap-4">
@@ -353,7 +353,7 @@ export default function Checkout() {
           </CheckoutCard>
         </div>
 
-        <aside className="glass sticky top-24 min-w-0 rounded-[28px] p-6 shadow-glow">
+        <aside className="glass sticky top-24 mb-8 min-w-0 rounded-[28px] p-6 shadow-glow md:mb-0">
           <div className="flex items-center gap-3">
             <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gold/12 text-gold">
               <ReceiptText size={24} />
