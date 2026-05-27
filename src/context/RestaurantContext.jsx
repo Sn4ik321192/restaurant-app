@@ -130,10 +130,10 @@ export function RestaurantProvider({ children }) {
     emailEnabled: isEmailAuthEnabled,
   };
 
-  const pushRemote = (operation) => {
-    if (!isRemoteDatabaseEnabled || !operation) return;
+  const pushRemote = (operation, { throwOnError = false } = {}) => {
+    if (!isRemoteDatabaseEnabled || !operation) return Promise.resolve();
 
-    Promise.resolve()
+    return Promise.resolve()
       .then(operation)
       .then(() => {
         setDatabaseStatus((current) => ({ ...current, connected: true, loading: false, error: '' }));
@@ -145,6 +145,9 @@ export function RestaurantProvider({ children }) {
           loading: false,
           error: error.message || 'Database sync error',
         }));
+        if (throwOnError) {
+          throw error;
+        }
       });
   };
 
@@ -199,7 +202,7 @@ export function RestaurantProvider({ children }) {
   const persistData = (nextData) => {
     setData(nextData);
     writeStorage(STORAGE_KEYS.restaurant, nextData);
-    pushRemote(() => saveRestaurantSettings(nextData));
+    return pushRemote(() => saveRestaurantSettings(nextData), { throwOnError: true });
   };
 
   const persistCart = (nextCart) => {
@@ -710,40 +713,40 @@ export function RestaurantProvider({ children }) {
   };
 
   const updateRestaurant = (updates) => {
-    persistData({ ...data, restaurant: { ...data.restaurant, ...updates } });
+    return persistData({ ...data, restaurant: { ...data.restaurant, ...updates } });
   };
 
   const updatePaymentSettings = (updates) => {
-    persistData({ ...data, payment: normalizePaymentSettings({ ...data.payment, ...updates }) });
+    return persistData({ ...data, payment: normalizePaymentSettings({ ...data.payment, ...updates }) });
   };
 
   const addDish = (dish) => {
     const newDish = { ...dish, id: createId(), price: Number(dish.price) || 0, popular: false };
-    persistData({
+    return persistData({
       ...data,
       menuItems: [newDish, ...data.menuItems],
-    });
-    pushRemote(() => saveMenuItem(newDish));
+    }).then(() => pushRemote(() => saveMenuItem(newDish), { throwOnError: true }));
   };
 
   const deleteDish = (id) => {
-    persistData({ ...data, menuItems: data.menuItems.filter((dish) => dish.id !== id) });
+    const sync = persistData({ ...data, menuItems: data.menuItems.filter((dish) => dish.id !== id) });
     persistCart(cart.filter((item) => item.id !== id));
-    pushRemote(() => deleteMenuItemFromDatabase(id));
+    return sync.then(() => pushRemote(() => deleteMenuItemFromDatabase(id), { throwOnError: true }));
   };
 
   const updateDishPrice = (id, price) => {
     const value = Number(price) || 0;
     const nextMenuItems = data.menuItems.map((dish) => (dish.id === id ? { ...dish, price: value } : dish));
-    persistData({
+    const sync = persistData({
       ...data,
       menuItems: nextMenuItems,
     });
     persistCart(cart.map((item) => (item.id === id ? { ...item, price: value } : item)));
     const updatedDish = nextMenuItems.find((dish) => dish.id === id);
     if (updatedDish) {
-      pushRemote(() => saveMenuItem(updatedDish));
+      return sync.then(() => pushRemote(() => saveMenuItem(updatedDish), { throwOnError: true }));
     }
+    return sync;
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);

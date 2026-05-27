@@ -11,6 +11,23 @@ const compact = (object) =>
   Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
 
 const eq = (value) => `eq.${encodeURIComponent(value)}`;
+const missingTableMarkers = ['42P01', 'PGRST205', 'Could not find the table', 'schema cache'];
+
+const isMissingTableError = (status, message = '') =>
+  status === 404 || missingTableMarkers.some((marker) => message.includes(marker));
+
+const createDatabaseError = (table, status, message) => {
+  const missingTable = isMissingTableError(status, message);
+  const hint = missingTable
+    ? `В Supabase не найдена таблица "${table}". Откройте SQL Editor и выполните файл database/schema.sql.`
+    : `Database error: ${status} ${message}`;
+  const error = new Error(hint);
+  error.status = status;
+  error.table = table;
+  error.details = message;
+  error.missingTable = missingTable;
+  return error;
+};
 
 async function request(table, { method = 'GET', query = 'select=*', body, prefer = 'return=representation' } = {}) {
   if (!isRemoteDatabaseEnabled) {
@@ -31,7 +48,7 @@ async function request(table, { method = 'GET', query = 'select=*', body, prefer
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`Database error: ${response.status} ${message}`);
+    throw createDatabaseError(table, response.status, message);
   }
 
   if (response.status === 204) {
@@ -46,8 +63,7 @@ async function optionalRequest(table, options) {
   try {
     return await request(table, options);
   } catch (error) {
-    const message = error.message || '';
-    if (message.includes('42P01') || message.includes('Could not find the table')) {
+    if (error.missingTable) {
       return [];
     }
     throw error;
@@ -320,35 +336,21 @@ export async function ensureDatabaseSeed(defaultData) {
 export async function fetchDatabaseState() {
   if (!isRemoteDatabaseEnabled) return null;
 
-  const [
-    settingsRows,
-    menuRows,
-    profileRows,
-    addressRows,
-    cardRows,
-    orderRows,
-    orderItemRows,
-    statusRows,
-    paymentRows,
-    paymentEventRows,
-    bonusAccountRows,
-    bonusTransactionRows,
-    bookingRows,
-  ] = await Promise.all([
-    request('restaurant_settings', { query: 'id=eq.main&select=*' }),
-    request('menu_items', { query: 'select=*&order=created_at.asc' }),
-    request('profiles', { query: 'select=*&order=created_at.desc' }),
-    request('user_addresses', { query: 'select=*&order=created_at.asc' }),
-    request('user_cards', { query: 'select=*&order=created_at.asc' }),
-    request('orders', { query: 'select=*&order=created_at.desc' }),
-    request('order_items', { query: 'select=*&order=id.asc' }),
-    request('order_status_events', { query: 'select=*&order=created_at.desc' }),
-    optionalRequest('payments', { query: 'select=*&order=created_at.desc' }),
-    optionalRequest('payment_events', { query: 'select=*&order=created_at.desc' }),
-    request('bonus_accounts', { query: 'select=*' }),
-    request('bonus_transactions', { query: 'select=*&order=created_at.desc' }),
-    request('bookings', { query: 'select=*&order=created_at.desc' }),
-  ]);
+  // Required tables are loaded step-by-step so a missing schema produces one clear error,
+  // instead of a wall of parallel 404 requests in DevTools.
+  const settingsRows = await request('restaurant_settings', { query: 'id=eq.main&select=*' });
+  const menuRows = await request('menu_items', { query: 'select=*&order=created_at.asc' });
+  const profileRows = await request('profiles', { query: 'select=*&order=created_at.desc' });
+  const addressRows = await request('user_addresses', { query: 'select=*&order=created_at.asc' });
+  const cardRows = await request('user_cards', { query: 'select=*&order=created_at.asc' });
+  const orderRows = await request('orders', { query: 'select=*&order=created_at.desc' });
+  const orderItemRows = await request('order_items', { query: 'select=*&order=id.asc' });
+  const statusRows = await request('order_status_events', { query: 'select=*&order=created_at.desc' });
+  const bonusAccountRows = await request('bonus_accounts', { query: 'select=*' });
+  const bonusTransactionRows = await request('bonus_transactions', { query: 'select=*&order=created_at.desc' });
+  const bookingRows = await request('bookings', { query: 'select=*&order=created_at.desc' });
+  const paymentRows = await optionalRequest('payments', { query: 'select=*&order=created_at.desc' });
+  const paymentEventRows = await optionalRequest('payment_events', { query: 'select=*&order=created_at.desc' });
 
   const profiles = {};
   (profileRows || []).forEach((row) => {

@@ -33,6 +33,7 @@ export default function Admin() {
     image: '',
   });
   const [notice, setNotice] = useState('');
+  const [savingAction, setSavingAction] = useState('');
   const [priceDrafts, setPriceDrafts] = useState(() =>
     Object.fromEntries(data.menuItems.map((item) => [item.id, String(item.price)])),
   );
@@ -52,36 +53,63 @@ export default function Admin() {
     });
   }, [data.restaurant.name, data.restaurant.phone, data.restaurant.address]);
 
-  const showNotice = (message) => {
+  const showNotice = (message, duration = 3200) => {
     setNotice(message);
-    window.setTimeout(() => setNotice(''), 2200);
+    window.setTimeout(() => setNotice(''), duration);
   };
 
   const updateRestaurantField = (event) => setRestaurant({ ...restaurant, [event.target.name]: event.target.value });
   const updateDishField = (event) => setDish({ ...dish, [event.target.name]: event.target.value });
 
-  const saveRestaurant = (event) => {
+  const saveRestaurant = async (event) => {
     event.preventDefault();
-    updateRestaurant(restaurant);
-    showNotice('Данные ресторана сохранены');
+    setSavingAction('restaurant');
+    try {
+      await updateRestaurant(restaurant);
+      showNotice(databaseStatus.enabled ? 'Данные ресторана сохранены в Supabase' : 'Данные ресторана сохранены локально');
+    } catch (error) {
+      showNotice(`Локально изменилось, но в базу не сохранилось: ${error.message}`, 7000);
+    } finally {
+      setSavingAction('');
+    }
   };
 
-  const createDish = (event) => {
+  const createDish = async (event) => {
     event.preventDefault();
-    addDish(dish);
-    setDish({ name: '', category: data.categories[0], description: '', price: '', image: '' });
-    showNotice('Блюдо добавлено в меню');
+    setSavingAction('dish');
+    try {
+      await addDish(dish);
+      setDish({ name: '', category: data.categories[0], description: '', price: '', image: '' });
+      showNotice(databaseStatus.enabled ? 'Блюдо добавлено и сохранено в Supabase' : 'Блюдо добавлено локально');
+    } catch (error) {
+      showNotice(`Блюдо видно локально, но в базу не сохранилось: ${error.message}`, 7000);
+    } finally {
+      setSavingAction('');
+    }
   };
 
-  const saveDishPrice = (id) => {
+  const saveDishPrice = async (id) => {
     const value = priceDrafts[id];
+    setSavingAction(`price-${id}`);
     if (value === '') {
       setPriceDrafts((current) => ({ ...current, [id]: '0' }));
-      updateDishPrice(id, 0);
+      try {
+        await updateDishPrice(id, 0);
+      } catch (error) {
+        showNotice(`Цена изменилась локально, но в базу не сохранилась: ${error.message}`, 7000);
+      } finally {
+        setSavingAction('');
+      }
       return;
     }
 
-    updateDishPrice(id, value);
+    try {
+      await updateDishPrice(id, value);
+    } catch (error) {
+      showNotice(`Цена изменилась локально, но в базу не сохранилась: ${error.message}`, 7000);
+    } finally {
+      setSavingAction('');
+    }
   };
 
   if (!isAuthenticated) {
@@ -152,7 +180,15 @@ export default function Admin() {
           </button>
         </div>
       </div>
-      {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
+      {notice && (
+        <div
+          className={`mt-6 rounded-2xl border p-4 font-bold ${
+            notice.includes('не сохрани') ? 'border-red-300/25 bg-red-500/10 text-red-100' : 'border-gold/25 bg-gold/10 text-gold'
+          }`}
+        >
+          {notice}
+        </div>
+      )}
 
       <div className="mt-8 flex flex-col gap-4 rounded-[24px] border border-gold/14 bg-charcoal/78 p-4 md:flex-row md:items-center md:justify-between md:p-5">
         <div className="flex items-start gap-4">
@@ -243,8 +279,11 @@ export default function Admin() {
           <FormField label="Название ресторана"><input className={inputClass} name="name" value={restaurant.name} onChange={updateRestaurantField} /></FormField>
           <FormField label="Телефон"><input className={inputClass} name="phone" value={restaurant.phone} onChange={updateRestaurantField} /></FormField>
           <FormField label="Адрес"><input className={inputClass} name="address" value={restaurant.address} onChange={updateRestaurantField} /></FormField>
-          <button className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
-            <Save size={18} /> Сохранить
+          <button
+            disabled={savingAction === 'restaurant'}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-wait disabled:opacity-65"
+          >
+            <Save size={18} /> {savingAction === 'restaurant' ? 'Сохраняем...' : 'Сохранить'}
           </button>
         </form>
 
@@ -263,8 +302,11 @@ export default function Admin() {
             <FormField label="Цена"><input required type="number" min="0" className={inputClass} name="price" value={dish.price} onChange={updateDishField} /></FormField>
             <FormField label="Фото URL"><input className={inputClass} name="image" value={dish.image} onChange={updateDishField} /></FormField>
           </div>
-          <button className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
-            <Plus size={18} /> Добавить блюдо
+          <button
+            disabled={savingAction === 'dish'}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-wait disabled:opacity-65"
+          >
+            <Plus size={18} /> {savingAction === 'dish' ? 'Добавляем...' : 'Добавить блюдо'}
           </button>
         </form>
       </div>
@@ -285,6 +327,7 @@ export default function Admin() {
                 min="0"
                 value={priceDrafts[item.id] ?? String(item.price)}
                 onChange={(event) => setPriceDrafts((current) => ({ ...current, [item.id]: event.target.value }))}
+                disabled={savingAction === `price-${item.id}`}
                 onBlur={() => saveDishPrice(item.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
@@ -294,13 +337,21 @@ export default function Admin() {
               />
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (window.confirm(`Удалить блюдо "${item.name}"?`)) {
-                    deleteDish(item.id);
-                    showNotice('Блюдо удалено');
+                    setSavingAction(`delete-${item.id}`);
+                    try {
+                      await deleteDish(item.id);
+                      showNotice(databaseStatus.enabled ? 'Блюдо удалено из Supabase' : 'Блюдо удалено локально');
+                    } catch (error) {
+                      showNotice(`Блюдо удалено локально, но в базе осталось: ${error.message}`, 7000);
+                    } finally {
+                      setSavingAction('');
+                    }
                   }
                 }}
-                className="grid h-12 w-12 place-items-center rounded-full border border-red-300/20 text-red-200 hover:bg-red-500/15"
+                disabled={savingAction === `delete-${item.id}`}
+                className="grid h-12 w-12 place-items-center rounded-full border border-red-300/20 text-red-200 hover:bg-red-500/15 disabled:cursor-wait disabled:opacity-65"
                 aria-label="Удалить блюдо"
               >
                 <Trash2 size={18} />

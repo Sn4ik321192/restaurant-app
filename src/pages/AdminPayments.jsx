@@ -18,6 +18,7 @@ export default function AdminPayments() {
   const { data, isAuthenticated, isAdmin, user, logout, updatePaymentSettings } = useRestaurant();
   const [settings, setSettings] = useState(() => normalizePaymentSettings(data.payment));
   const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setSettings(normalizePaymentSettings(data.payment));
@@ -40,11 +41,18 @@ export default function AdminPayments() {
       }),
     );
 
-  const save = (event) => {
+  const save = async (event) => {
     event.preventDefault();
-    updatePaymentSettings(settings);
-    setNotice('Настройки оплаты сохранены');
-    window.setTimeout(() => setNotice(''), 2200);
+    setSaving(true);
+    try {
+      await updatePaymentSettings(settings);
+      setNotice('Настройки оплаты сохранены');
+    } catch (error) {
+      setNotice(`Настройки изменились локально, но в базу не сохранились: ${error.message}`);
+    } finally {
+      setSaving(false);
+      window.setTimeout(() => setNotice(''), 7000);
+    }
   };
 
   if (!isAuthenticated) {
@@ -105,7 +113,15 @@ export default function AdminPayments() {
         </div>
       </div>
 
-      {notice && <div className="mt-6 rounded-2xl border border-gold/25 bg-gold/10 p-4 font-bold text-gold">{notice}</div>}
+      {notice && (
+        <div
+          className={`mt-6 rounded-2xl border p-4 font-bold ${
+            notice.includes('не сохрани') ? 'border-red-300/25 bg-red-500/10 text-red-100' : 'border-gold/25 bg-gold/10 text-gold'
+          }`}
+        >
+          {notice}
+        </div>
+      )}
 
       <form onSubmit={save} className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
@@ -197,8 +213,11 @@ export default function AdminPayments() {
             </div>
           </div>
 
-          <button className="shine mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream">
-            <Save size={18} /> Сохранить оплату
+          <button
+            disabled={saving}
+            className="shine mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-gold px-6 py-4 font-extrabold text-ink hover:bg-cream disabled:cursor-wait disabled:opacity-65"
+          >
+            <Save size={18} /> {saving ? 'Сохраняем...' : 'Сохранить оплату'}
           </button>
         </aside>
       </form>
