@@ -74,12 +74,10 @@ export default function App() {
   return (
     <div className="min-h-screen overflow-hidden pb-20 text-cream md:pb-0">
       <AmbientMotion />
-      <ClickBursts />
       {showSplash && <SplashScreen exiting={hideSplash} name={data.restaurant.name} />}
-      <PageTransitionFx key={location.key || location.pathname} />
       <Header />
       {authNotice && <AuthNotice message={authNotice} onClose={() => setAuthNotice('')} />}
-      <main key={location.pathname} className="page-enter">
+      <main>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/menu" element={<Menu />} />
@@ -111,37 +109,6 @@ function AmbientMotion() {
       <span className="motion-grain" />
     </div>
   );
-}
-
-function PageTransitionFx() {
-  return (
-    <div className="route-fx" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-    </div>
-  );
-}
-
-function ClickBursts() {
-  useEffect(() => {
-    const handlePointerDown = (event) => {
-      const target = event.target.closest('button, a[href], [role="button"]');
-      if (!target || target.classList.contains('no-click-burst')) return;
-
-      const burst = document.createElement('span');
-      burst.className = 'click-burst';
-      burst.style.left = `${event.clientX}px`;
-      burst.style.top = `${event.clientY}px`;
-      document.body.appendChild(burst);
-      window.setTimeout(() => burst.remove(), 680);
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, []);
-
-  return null;
 }
 
 function AuthNotice({ message, onClose }) {

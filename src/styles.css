@@ -72,12 +72,6 @@ a[href],
     filter 220ms ease;
 }
 
-button:not(:disabled):active,
-a[href]:active,
-[role='button']:active {
-  transform: translateY(1px) scale(0.98);
-}
-
 button:focus-visible,
 a[href]:focus-visible,
 [role='button']:focus-visible,
@@ -186,12 +180,6 @@ select:focus-visible {
   animation-duration: 1.25s;
 }
 
-.page-enter {
-  animation: pageReveal 0.86s cubic-bezier(0.18, 0.84, 0.28, 1) both;
-  transform-origin: top center;
-  will-change: transform, opacity, filter;
-}
-
 .splash-enter {
   animation: splashFade 0.5s ease both;
 }
@@ -269,72 +257,6 @@ select:focus-visible {
   animation: grainFloat 18s linear infinite;
 }
 
-.route-fx {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.route-fx span {
-  position: absolute;
-  inset-block: -18%;
-  width: 42vw;
-  min-width: 260px;
-  background:
-    linear-gradient(90deg, transparent 0%, rgba(216, 179, 95, 0.14) 18%, rgba(243, 231, 208, 0.2) 46%, rgba(20, 17, 14, 0.72) 62%, transparent 100%);
-  opacity: 0;
-  transform: translateX(-145%) skewX(-16deg);
-  filter: blur(0.2px);
-  animation: routeSweep 920ms cubic-bezier(0.18, 0.84, 0.28, 1) forwards;
-}
-
-.route-fx span:nth-child(1) {
-  left: -20vw;
-}
-
-.route-fx span:nth-child(2) {
-  left: 20vw;
-  animation-delay: 70ms;
-}
-
-.route-fx span:nth-child(3) {
-  left: 58vw;
-  animation-delay: 130ms;
-}
-
-.click-burst {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 9999;
-  width: 0.85rem;
-  height: 0.85rem;
-  pointer-events: none;
-  border-radius: 999px;
-  border: 1px solid rgba(245, 217, 139, 0.9);
-  box-shadow:
-    0 0 0 0 rgba(216, 179, 95, 0.34),
-    0 0 26px rgba(216, 179, 95, 0.5);
-  transform: translate(-50%, -50%) scale(0.38);
-  animation: clickBurst 680ms ease-out forwards;
-}
-
-.click-burst::before,
-.click-burst::after {
-  content: '';
-  position: absolute;
-  inset: -0.55rem;
-  border-radius: inherit;
-  border: 1px solid rgba(216, 179, 95, 0.42);
-}
-
-.click-burst::after {
-  inset: -1.05rem;
-  border-color: rgba(243, 231, 208, 0.28);
-}
-
 .checkout-input {
   width: 100%;
   border-radius: 0.95rem;
@@ -401,30 +323,8 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 
-  .motion-atmosphere,
-  .route-fx,
-  .click-burst {
+  .motion-atmosphere {
     display: none !important;
-  }
-}
-
-@keyframes pageReveal {
-  0% {
-    opacity: 0;
-    transform: translateY(38px) scale(0.982);
-    filter: blur(14px);
-  }
-
-  58% {
-    opacity: 1;
-    transform: translateY(-3px) scale(1.002);
-    filter: blur(0);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
 
@@ -468,39 +368,6 @@ select:focus-visible {
 
   to {
     background-position: 92px 92px, -92px 92px;
-  }
-}
-
-@keyframes routeSweep {
-  0% {
-    opacity: 0;
-    transform: translateX(-145%) skewX(-16deg);
-  }
-
-  14%,
-  62% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateX(255%) skewX(-16deg);
-  }
-}
-
-@keyframes clickBurst {
-  0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(0.34);
-  }
-
-  72% {
-    opacity: 0.7;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(3.6);
   }
 }
 
